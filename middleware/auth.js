@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { UnauthorizedError } = require('../utils/errors');
 
 /**
  * Auth Middleware — Dual-source JWT verification.
@@ -19,7 +20,7 @@ const authMiddleware = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({ message: 'No token provided. Access denied.' });
+      return next(new UnauthorizedError('Authentication is required.'));
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -27,13 +28,13 @@ const authMiddleware = async (req, res, next) => {
     // Always load user from DB so role cannot be manipulated client-side
     const user = await User.findById(decoded.id).select('-password');
     if (!user) {
-      return res.status(401).json({ message: 'User not found. Token invalid.' });
+      return next(new UnauthorizedError('Authentication is required.'));
     }
 
     req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Token expired or invalid.' });
+    return next(new UnauthorizedError('Authentication is required.'));
   }
 };
 

@@ -7,6 +7,9 @@ const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const { triggerEmergencyWorkflow } = require('../utils/emergencyEngine');
 const notificationService = require('../utils/notificationService');
+const { escapeRegex, buildDateQuery, isValidObjectId } = require('../utils/queryHelper');
+const { parsePagination, formatPaginatedResponse } = require('../utils/paginationHelper');
+const { BadRequestError } = require('../utils/errors');
 
 // Pre-defined available emergency response teams in ecosystem
 const EMERGENCY_TEAMS_ROSTER = [
@@ -56,7 +59,7 @@ const EMERGENCY_TEAMS_ROSTER = [
  * POST /api/emergency/sos — Patient activates manual or automatic SOS
  * Patient identity is strictly extracted from authentication JWT.
  */
-router.post('/sos', auth, async (req, res) => {
+router.post('/sos', auth, async (req, res, next) => {
   try {
     const patientId = req.user._id;
     const patient = await User.findById(patientId);
@@ -114,15 +117,14 @@ router.post('/sos', auth, async (req, res) => {
       alert: result.alert
     });
   } catch (err) {
-    console.error('[SOS POST ERROR]', err);
-    res.status(500).json({ message: err.message || 'Failed to trigger SOS emergency alert' });
+    next(err);
   }
 });
 
 /**
  * POST /api/emergency/:id/cancel — Cancel SOS (if false alarm before advanced care)
  */
-router.post('/:id/cancel', auth, async (req, res) => {
+router.post('/:id/cancel', auth, async (req, res, next) => {
   try {
     const { reason = 'Patient confirmed false alarm' } = req.body;
     const emergencyCase = await EmergencyCase.findById(req.params.id);
@@ -175,7 +177,7 @@ router.post('/:id/cancel', auth, async (req, res) => {
       emergencyCase
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -186,7 +188,7 @@ router.post('/:id/cancel', auth, async (req, res) => {
 /**
  * GET /api/emergency/dashboard-stats — Aggregated metrics computed from DB
  */
-router.get('/dashboard-stats', auth, async (_req, res) => {
+router.get('/dashboard-stats', auth, async (req, res, next) => {
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -215,14 +217,14 @@ router.get('/dashboard-stats', auth, async (_req, res) => {
       priorityCounts
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * GET /api/emergency/active — Active emergency incidents stream
  */
-router.get('/active', auth, async (req, res) => {
+router.get('/active', auth, async (req, res, next) => {
   try {
     let query = { status: { $in: ['ACTIVE', 'ACKNOWLEDGED', 'TEAM_ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'UNDER_CARE'] } };
 
@@ -240,14 +242,14 @@ router.get('/active', auth, async (req, res) => {
 
     res.json(cases);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * GET /api/emergency/history — Patient emergency history
  */
-router.get('/history', auth, async (req, res) => {
+router.get('/history', auth, async (req, res, next) => {
   try {
     let query = {};
     if (req.user.role === 'patient') {
@@ -266,7 +268,7 @@ router.get('/history', auth, async (req, res) => {
 
     res.json(cases);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -277,9 +279,9 @@ router.get('/history', auth, async (req, res) => {
 /**
  * GET /api/emergency/cases — List emergency cases with filtering
  */
-router.get('/cases', auth, async (req, res) => {
+router.get('/cases', auth, async (req, res, next) => {
   try {
-    const { status, priority, emergencyType, search } = req.query;
+    const { status, priority, emergencyType, search, startDate, endDate } = req.query;
     let query = {};
 
     if (req.user.role === 'patient') {
@@ -291,28 +293,46 @@ router.get('/cases', auth, async (req, res) => {
     if (status) query.status = status;
     if (priority) query.priority = priority;
     if (emergencyType) query.emergencyType = emergencyType;
-    if (search) {
+
+    // Database-level date filtering
+    const dateQuery = buildDateQuery(startDate, endDate, 'triggeredAt');
+    if (dateQuery) {
+      Object.assign(query, dateQuery);
+    }
+
+    if (search && search.trim()) {
+      const safe = escapeRegex(search.trim());
       query.$or = [
-        { emergencyId: { $regex: search, $options: 'i' } },
-        { patientName: { $regex: search, $options: 'i' } }
+        { emergencyId: { $regex: safe, $options: 'i' } },
+        { patientName: { $regex: safe, $options: 'i' } }
       ];
     }
 
-    const cases = await EmergencyCase.find(query)
-      .populate('patientId', 'name age gender bloodGroup phone roomLocation')
-      .populate('assignedDoctor', 'name specialization')
-      .sort({ triggeredAt: -1 });
+    const pagination = parsePagination(req);
+    if (!pagination.isValid) {
+      return next(new BadRequestError(pagination.error));
+    }
 
-    res.json(cases);
+    const [total, cases] = await Promise.all([
+      EmergencyCase.countDocuments(query),
+      EmergencyCase.find(query)
+        .populate('patientId', 'name age gender bloodGroup phone roomLocation')
+        .populate('assignedDoctor', 'name specialization')
+        .sort({ triggeredAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+    ]);
+
+    res.json(formatPaginatedResponse(cases, total, pagination.page, pagination.limit));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * GET /api/emergency/cases/:id — Get single case details (with role-based privacy masking)
  */
-router.get('/cases/:id', auth, async (req, res) => {
+router.get('/cases/:id', auth, async (req, res, next) => {
   try {
     const emergencyCase = await EmergencyCase.findById(req.params.id)
       .populate('patientId', 'name age gender bloodGroup phone roomLocation allergies allergiesDetail medicalConditionsDetail medicalHistory caregiverPhone emergencyContact emergencyContacts')
@@ -334,7 +354,7 @@ router.get('/cases/:id', auth, async (req, res) => {
 
     res.json(emergencyCase);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -345,7 +365,7 @@ router.get('/cases/:id', auth, async (req, res) => {
 /**
  * PUT /api/emergency/cases/:id/status — Advance emergency case status in workflow
  */
-router.put('/cases/:id/status', auth, role('emergency', 'admin', 'doctor', 'hospital'), async (req, res) => {
+router.put('/cases/:id/status', auth, role('emergency', 'admin', 'doctor', 'hospital'), async (req, res, next) => {
   try {
     const { status, notes } = req.body;
     const validStatuses = ['ACTIVE', 'ACKNOWLEDGED', 'TEAM_ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'UNDER_CARE', 'RESOLVED', 'CANCELLED'];
@@ -411,14 +431,14 @@ router.put('/cases/:id/status', auth, role('emergency', 'admin', 'doctor', 'hosp
       emergencyCase
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * POST /api/emergency/cases/:id/acknowledge — Acknowledge emergency case
  */
-router.post('/cases/:id/acknowledge', auth, role('emergency', 'doctor', 'admin', 'hospital'), async (req, res) => {
+router.post('/cases/:id/acknowledge', auth, role('emergency', 'doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const emergencyCase = await EmergencyCase.findById(req.params.id);
     if (!emergencyCase) {
@@ -442,14 +462,14 @@ router.post('/cases/:id/acknowledge', auth, role('emergency', 'doctor', 'admin',
       emergencyCase
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * POST /api/emergency/cases/:id/assign-team — Assign emergency response team
  */
-router.post('/cases/:id/assign-team', auth, role('emergency', 'admin', 'hospital'), async (req, res) => {
+router.post('/cases/:id/assign-team', auth, role('emergency', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const { teamId, teamName, leadResponder, contactPhone, vehicleType } = req.body;
 
@@ -487,14 +507,14 @@ router.post('/cases/:id/assign-team', auth, role('emergency', 'admin', 'hospital
       emergencyCase
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * POST /api/emergency/cases/:id/notes — Add note to timeline
  */
-router.post('/cases/:id/notes', auth, async (req, res) => {
+router.post('/cases/:id/notes', auth, async (req, res, next) => {
   try {
     const text = req.body.text || req.body.note || req.body.notes;
     if (!text) return res.status(400).json({ message: 'Note text is required' });
@@ -520,7 +540,7 @@ router.post('/cases/:id/notes', auth, async (req, res) => {
     await emergencyCase.save();
     res.json({ message: 'Note added to emergency timeline', emergencyCase });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -531,7 +551,7 @@ router.post('/cases/:id/notes', auth, async (req, res) => {
 /**
  * GET /api/emergency/contacts — Retrieve patient's emergency contacts
  */
-router.get('/contacts', auth, async (req, res) => {
+router.get('/contacts', auth, async (req, res, next) => {
   try {
     const targetUserId = (req.query.patientId && ['doctor', 'admin', 'emergency'].includes(req.user.role))
       ? req.query.patientId
@@ -542,14 +562,14 @@ router.get('/contacts', auth, async (req, res) => {
 
     res.json(user.emergencyContacts || []);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * POST /api/emergency/contacts — Add a new emergency contact
  */
-router.post('/contacts', auth, async (req, res) => {
+router.post('/contacts', auth, async (req, res, next) => {
   try {
     const { name, relationship = 'Family', phone, email = '', priority = 'Secondary', isPrimary = false } = req.body;
 
@@ -584,14 +604,14 @@ router.post('/contacts', auth, async (req, res) => {
       emergencyContacts: user.emergencyContacts
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * PUT /api/emergency/contacts/:id — Edit an emergency contact
  */
-router.put('/contacts/:id', auth, async (req, res) => {
+router.put('/contacts/:id', auth, async (req, res, next) => {
   try {
     const { name, relationship, phone, email, priority, isPrimary } = req.body;
     const user = await User.findById(req.user._id);
@@ -616,14 +636,14 @@ router.put('/contacts/:id', auth, async (req, res) => {
     await user.save();
     res.json({ message: 'Emergency contact updated', emergencyContacts: user.emergencyContacts });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * DELETE /api/emergency/contacts/:id — Delete an emergency contact
  */
-router.delete('/contacts/:id', auth, async (req, res) => {
+router.delete('/contacts/:id', auth, async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -633,14 +653,14 @@ router.delete('/contacts/:id', auth, async (req, res) => {
 
     res.json({ message: 'Emergency contact removed', emergencyContacts: user.emergencyContacts });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 /**
  * PUT /api/emergency/contacts/:id/primary — Set primary emergency contact
  */
-router.put('/contacts/:id/primary', auth, async (req, res) => {
+router.put('/contacts/:id/primary', auth, async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -660,7 +680,7 @@ router.put('/contacts/:id/primary', auth, async (req, res) => {
     await user.save();
     res.json({ message: `${contact.name} set as primary emergency contact`, emergencyContacts: user.emergencyContacts });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -671,7 +691,7 @@ router.put('/contacts/:id/primary', auth, async (req, res) => {
 /**
  * GET /api/emergency/teams — List available response units
  */
-router.get('/teams', auth, async (_req, res) => {
+router.get('/teams', auth, async (req, res, next) => {
   res.json(EMERGENCY_TEAMS_ROSTER);
 });
 
@@ -680,19 +700,19 @@ router.get('/teams', auth, async (_req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/emergency/alerts — view active critical emergency alerts
-router.get('/alerts', auth, role('emergency', 'admin', 'doctor', 'hospital'), async (_req, res) => {
+router.get('/alerts', auth, role('emergency', 'admin', 'doctor', 'hospital'), async (req, res, next) => {
   try {
     const alerts = await Alert.find({ type: { $in: ['Critical', 'SOS'] } })
       .populate('patientId', 'name email age bloodGroup phone roomLocation caregiverPhone emergencyContact medicalHistory allergies')
       .sort({ createdAt: -1 });
     res.json(alerts);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // PUT /api/emergency/dispatch/:id — dispatch ambulance or update status
-router.put('/dispatch/:id', auth, role('emergency', 'admin'), async (req, res) => {
+router.put('/dispatch/:id', auth, role('emergency', 'admin'), async (req, res, next) => {
   try {
     const { status } = req.body;
     const alert = await Alert.findByIdAndUpdate(
@@ -702,7 +722,7 @@ router.put('/dispatch/:id', auth, role('emergency', 'admin'), async (req, res) =
     );
     res.json({ message: `Ambulance dispatch status updated to ${status}`, alert });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 

@@ -4,8 +4,10 @@
  * with strict privacy controls and timeline auditing.
  */
 
+const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const { sendToUser, broadcastToRole } = require('./socket');
 
 class NotificationService {
   /**
@@ -61,6 +63,7 @@ class NotificationService {
         severity: 'Critical'
       });
       await docNotification.save();
+      sendToUser(doctorId, 'notification', docNotification.toObject());
 
       console.log(`[DOCTOR NOTIFICATION DISPATCHED] ➔ Doctor ID: ${doctorId} for Case: ${emergencyCase.emergencyId}`);
 
@@ -107,7 +110,8 @@ class NotificationService {
       }));
 
       if (notifications.length > 0) {
-        await Notification.insertMany(notifications);
+        const savedNotifs = await Notification.insertMany(notifications);
+        savedNotifs.forEach(n => sendToUser(n.recipientId, 'notification', n.toObject()));
       }
 
       console.log(`[HOSPITAL NOTIFICATION DISPATCHED] ➔ ${notifications.length} ER officers/admins notified.`);
@@ -151,7 +155,8 @@ class NotificationService {
       }));
 
       if (notifications.length > 0) {
-        await Notification.insertMany(notifications);
+        const savedNotifs = await Notification.insertMany(notifications);
+        savedNotifs.forEach(n => sendToUser(n.recipientId, 'notification', n.toObject()));
       }
 
       return {
@@ -248,11 +253,127 @@ class NotificationService {
       }));
 
       if (notifications.length > 0) {
-        await Notification.insertMany(notifications);
+        const savedNotifs = await Notification.insertMany(notifications);
+        savedNotifs.forEach(n => sendToUser(n.recipientId, 'notification', n.toObject()));
       }
     } catch (err) {
       console.error('[NOTIFICATION ERROR - Cancellation]', err.message);
     }
+  }
+
+  /**
+   * Dispatches in-app notification to Lab Staff when a new TestRequest is created.
+   * Supports:
+   *  - CASE A: Specific assigned lab staff (testRequest.assignedLabStaff || testRequest.assignedLab)
+   *  - CASE B: Broadcast to all active users with role 'lab' (CareLink lab team model)
+   *
+   * Guarantees:
+   *  - Recipient is NOT the requester (when requester is doctor, admin, hospital)
+   *  - Every notification has recipientId set to the actual lab staff member's ID
+   *  - Requester information is preserved in senderId
+   *  - Exactly ONE notification per intended recipient (prevents duplicates)
+   */
+  async notifyLabTestRequest(testRequest, requester = null) {
+    try {
+      if (!testRequest || !testRequest._id) {
+        console.warn('[NOTIFICATION - Lab] Cannot send notification: missing testRequest');
+        return [];
+      }
+
+      const priority = testRequest.priority || 'Normal';
+      const severity = priority === 'Critical' ? 'Critical' : (priority === 'Urgent' ? 'Warning' : 'Normal');
+      const testName = testRequest.testName || 'Diagnostic Test';
+      const requestId = testRequest.requestId || testRequest._id.toString();
+
+      // Check existing notifications to prevent duplicate notifications for this test request
+      const existingNotifs = await Notification.find({
+        testRequestId: testRequest._id,
+        type: 'test_requested'
+      }).select('recipientId');
+
+      const alreadyNotified = new Set(existingNotifs.map(n => n.recipientId.toString()));
+
+      // ─── CASE A: Specific Assigned Lab Staff Member ─────────────────────────
+      const specificStaffId = testRequest.assignedLabStaff || testRequest.assignedLab;
+      if (specificStaffId && mongoose.Types.ObjectId.isValid(specificStaffId)) {
+        const targetStaff = await User.findOne({ _id: specificStaffId, role: 'lab', isActive: true });
+        if (targetStaff) {
+          if (alreadyNotified.has(targetStaff._id.toString())) {
+            return [];
+          }
+
+          const senderId = requester?._id || (mongoose.Types.ObjectId.isValid(requester) ? requester : null);
+
+          const notification = new Notification({
+            recipientId: targetStaff._id,
+            senderId,
+            role: 'lab',
+            type: 'test_requested',
+            title: `📋 New Test Request: ${testName}`,
+            message: `Priority: ${priority} for patient. Request ID: ${requestId}`,
+            link: '/lab.html#orders',
+            testRequestId: testRequest._id,
+            severity
+          });
+
+          await notification.save();
+          sendToUser(targetStaff._id, 'notification', notification.toObject());
+          console.log(`[LAB NOTIFICATION DISPATCHED] ➔ Assigned staff: ${targetStaff.name} (${targetStaff._id}) for Request: ${requestId}`);
+          return [notification];
+        }
+      }
+
+      // ─── CASE B: Broadcast to Active Lab Team ───────────────────────────────
+      const labUsers = await User.find({ role: 'lab', isActive: true });
+      if (!labUsers || labUsers.length === 0) {
+        console.warn(`[NOTIFICATION - Lab] No active lab staff found for Test Request: ${requestId}`);
+        return [];
+      }
+
+      // Ensure each recipient receives exactly ONE notification (no duplicates)
+      const seen = new Set();
+      const notificationsToCreate = [];
+      const senderId = requester?._id || (mongoose.Types.ObjectId.isValid(requester) ? requester : null);
+
+      for (const user of labUsers) {
+        const userIdStr = user._id.toString();
+        if (alreadyNotified.has(userIdStr) || seen.has(userIdStr)) {
+          continue;
+        }
+        seen.add(userIdStr);
+
+        notificationsToCreate.push({
+          recipientId: user._id,
+          senderId,
+          role: 'lab',
+          type: 'test_requested',
+          title: `📋 New Test Request: ${testName}`,
+          message: `Priority: ${priority} for patient. Request ID: ${requestId}`,
+          link: '/lab.html#orders',
+          testRequestId: testRequest._id,
+          severity
+        });
+      }
+
+      if (notificationsToCreate.length === 0) {
+        return [];
+      }
+
+      const created = await Notification.insertMany(notificationsToCreate);
+      created.forEach(n => sendToUser(n.recipientId, 'notification', n.toObject()));
+      console.log(`[LAB NOTIFICATION DISPATCHED] ➔ ${created.length} lab staff notified for Request: ${requestId}`);
+      return created;
+    } catch (err) {
+      console.error('[NOTIFICATION ERROR - Lab]', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Alias for notifyLabTestRequest
+   */
+  async sendLabTestRequestNotification(testRequest, requester = null) {
+    return this.notifyLabTestRequest(testRequest, requester);
   }
 }
 

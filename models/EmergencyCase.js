@@ -54,14 +54,12 @@ const EmergencyCaseSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    index: true,
     default: () => `EMG-${Math.floor(1000 + Math.random() * 9000)}`
   },
   patientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
   },
   patientName: {
     type: String,
@@ -91,8 +89,7 @@ const EmergencyCaseSchema = new mongoose.Schema({
       'RESOLVED',
       'CANCELLED'
     ],
-    default: 'ACTIVE',
-    index: true
+    default: 'ACTIVE'
   },
   priority: {
     type: String,
@@ -174,5 +171,11 @@ EmergencyCaseSchema.pre('validate', function (next) {
   }
   next();
 });
+
+// Step 7: Database indexes for frequently queried emergency workflows
+EmergencyCaseSchema.index({ patientId: 1, triggeredAt: -1 });
+EmergencyCaseSchema.index({ status: 1, triggeredAt: -1 });
+EmergencyCaseSchema.index({ assignedDoctor: 1, triggeredAt: -1 });
+EmergencyCaseSchema.index({ triggeredAt: -1 });
 
 module.exports = mongoose.model('EmergencyCase', EmergencyCaseSchema);

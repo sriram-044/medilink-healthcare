@@ -20,6 +20,9 @@ const { generateReportAiAnalysis } = require('./reportAiEngine');
 
 const seed = async () => {
   try {
+    // In production, never seed demo accounts or mock passwords
+    if (process.env.NODE_ENV === 'production') return;
+
     const existing = await User.findOne({ email: 'patient@demo.com' });
     if (existing) return; // already seeded
 

@@ -21,4 +21,7 @@ const HospitalVisitSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Step 7: Database index for patient hospital visit history
+HospitalVisitSchema.index({ patientId: 1, visitDate: -1 });
+
 module.exports = mongoose.model('HospitalVisit', HospitalVisitSchema);

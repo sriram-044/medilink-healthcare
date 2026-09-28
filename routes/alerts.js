@@ -5,35 +5,52 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 const { triggerEmergencyWorkflow } = require('../utils/emergencyEngine');
+const { parsePagination, formatPaginatedResponse } = require('../utils/paginationHelper');
+const { BadRequestError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
 // GET /api/alerts — active alerts (doctor/admin)
-router.get('/', auth, role('doctor', 'admin'), async (req, res) => {
+router.get('/', auth, role('doctor', 'admin'), async (req, res, next) => {
   try {
     let query = req.user.role === 'doctor' ? { doctorId: req.user._id } : {};
     if (req.query.resolved === 'false') query.resolved = false;
-    const alerts = await Alert.find(query)
-      .populate('patientId', 'name email age bloodGroup phone roomLocation caregiverPhone emergencyContact')
-      .sort({ createdAt: -1 });
-    res.json(alerts);
+    const pagination = parsePagination(req);
+    if (!pagination.isValid) {
+      return next(new BadRequestError(pagination.error));
+    }
+
+    const [total, alerts] = await Promise.all([
+      Alert.countDocuments(query),
+      Alert.find(query)
+        .populate('patientId', 'name email age bloodGroup phone roomLocation caregiverPhone emergencyContact')
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+    ]);
+
+    res.json(formatPaginatedResponse(alerts, total, pagination.page, pagination.limit));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // GET /api/alerts/patient/:patientId — alerts for a specific patient
-router.get('/patient/:patientId', auth, async (req, res) => {
+router.get('/patient/:patientId', auth, async (req, res, next) => {
   try {
+    if (req.user.role === 'patient' && req.user._id.toString() !== req.params.patientId) {
+      return next(new ForbiddenError('Access denied'));
+    }
     const alerts = await Alert.find({ patientId: req.params.patientId }).sort({ createdAt: -1 });
     res.json(alerts);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // POST /api/alerts/sos — patient SOS button (triggers full emergency workflow)
-router.post('/sos', auth, role('patient'), async (req, res) => {
+router.post('/sos', auth, role('patient'), async (req, res, next) => {
   try {
     const patient = await User.findById(req.user._id);
+    if (!patient) return next(new NotFoundError('Patient not found'));
     const { location } = req.body;
 
     const alert = await triggerEmergencyWorkflow({
@@ -52,12 +69,12 @@ router.post('/sos', auth, role('patient'), async (req, res) => {
       alert
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // PUT /api/alerts/:id/status — update emergency status ('Acknowledged', 'Dispatched', 'Resolved')
-router.put('/:id/status', auth, role('doctor', 'admin'), async (req, res) => {
+router.put('/:id/status', auth, role('doctor', 'admin'), async (req, res, next) => {
   try {
     const { status } = req.body;
     const isResolved = status === 'Resolved';
@@ -71,23 +88,25 @@ router.put('/:id/status', auth, role('doctor', 'admin'), async (req, res) => {
       },
       { new: true }
     );
+    if (!alert) return next(new NotFoundError('Alert not found'));
     res.json({ message: `Alert status updated to ${status}`, alert });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // PUT /api/alerts/:id/resolve — resolve alert
-router.put('/:id/resolve', auth, role('doctor', 'admin'), async (req, res) => {
+router.put('/:id/resolve', auth, role('doctor', 'admin'), async (req, res, next) => {
   try {
     const alert = await Alert.findByIdAndUpdate(
       req.params.id,
       { resolved: true, emergencyStatus: 'Resolved', resolvedAt: new Date(), resolvedBy: req.user._id },
       { new: true }
     );
+    if (!alert) return next(new NotFoundError('Alert not found'));
     res.json({ message: 'Alert resolved', alert });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 

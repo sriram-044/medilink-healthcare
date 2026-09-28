@@ -1,0 +1,271 @@
+/**
+ * frontend/components/carelink-ai/ai-chat.css — Reusable CareLink AI Styles
+ * Premium healthcare UI with responsive layout, glassmorphism, and clear state styling.
+ */
+
+/* ─── Floating Launch Button ──────────────────────────────────────────────── */
+.carelink-ai-launcher {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4), 0 8px 10px -6px rgba(16, 185, 129, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carelink-ai-launcher:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 14px 28px -4px rgba(16, 185, 129, 0.5);
+}
+
+.carelink-ai-launcher:active {
+  transform: translateY(0);
+}
+
+/* ─── AI Modal Window ─────────────────────────────────────────────────────── */
+.carelink-ai-window {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  height: 600px;
+  max-height: calc(100vh - 120px);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.2);
+  display: flex;
+  flex-direction: column;
+  z-index: 10000;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.carelink-ai-window.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+/* ─── AI Header ───────────────────────────────────────────────────────────── */
+.carelink-ai-header {
+  padding: 16px 20px;
+  background: #0f172a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.carelink-ai-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.carelink-ai-icon {
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.carelink-ai-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.carelink-ai-badge {
+  font-size: 11px;
+  background: #10b981;
+  color: #ffffff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.carelink-ai-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.carelink-ai-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Informational Disclaimer Banner ─────────────────────────────────────── */
+.carelink-ai-disclaimer-banner {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 16px;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─── Messages Viewport ───────────────────────────────────────────────────── */
+.carelink-ai-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #f8fafc;
+}
+
+.carelink-ai-msg {
+  max-width: 86%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.carelink-ai-msg.user {
+  align-self: flex-end;
+  background: #10b981;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.carelink-ai-msg.ai {
+  align-self: flex-start;
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.carelink-ai-reqid {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 6px;
+  display: block;
+}
+
+/* ─── Suggestion Chips ────────────────────────────────────────────────────── */
+.carelink-ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.carelink-ai-chip {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.carelink-ai-chip:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+/* ─── Loading Indicator ──────────────────────────────────────────────────── */
+.carelink-ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.carelink-ai-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: carelink-ai-spin 0.75s linear infinite;
+}
+
+@keyframes carelink-ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Input Form ──────────────────────────────────────────────────────────── */
+.carelink-ai-input-form {
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+}
+
+.carelink-ai-input {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.carelink-ai-input:focus {
+  border-color: #10b981;
+}
+
+.carelink-ai-send-btn {
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.carelink-ai-send-btn:hover {
+  background: #059669;
+}
+
+.carelink-ai-send-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}

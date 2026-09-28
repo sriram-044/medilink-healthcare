@@ -22,7 +22,10 @@ async function makeRequest(path, options = {}) {
 
   const res = await fetch(url, { method, headers, body });
   const data = await res.json().catch(() => null);
-  return { status: res.status, ok: res.ok, data };
+  const setCookie = res.headers.get('set-cookie') || '';
+  const match = setCookie.match(/carelink_auth=([^;]+)/);
+  const token = match ? match[1] : undefined;
+  return { status: res.status, ok: res.ok, data, token };
 }
 
 async function runRouteTests() {
@@ -49,24 +52,24 @@ async function runRouteTests() {
       body: { email: 'ravi@demo.com', password: 'demo123' }
     });
     assert.strictEqual(patientLogin.status, 200, 'Patient login failed');
-    patientToken = patientLogin.data.token;
-    patientUser = patientLogin.data.user;
+    patientToken = patientLogin.data?.token || patientLogin.token;
+    patientUser = patientLogin.data?.user;
 
     const doctorLogin = await makeRequest('/api/auth/login', {
       method: 'POST',
       body: { email: 'doctor@demo.com', password: 'demo123' }
     });
     assert.strictEqual(doctorLogin.status, 200, 'Doctor login failed');
-    doctorToken = doctorLogin.data.token;
-    doctorUser = doctorLogin.data.user;
+    doctorToken = doctorLogin.data?.token || doctorLogin.token;
+    doctorUser = doctorLogin.data?.user;
 
     const erLogin = await makeRequest('/api/auth/login', {
       method: 'POST',
       body: { email: 'emergency@demo.com', password: 'demo123' }
     });
     assert.strictEqual(erLogin.status, 200, 'Emergency officer login failed');
-    erOfficerToken = erLogin.data.token;
-    erOfficerUser = erLogin.data.user;
+    erOfficerToken = erLogin.data?.token || erLogin.token;
+    erOfficerUser = erLogin.data?.user;
 
     assert.ok(patientToken, 'Patient token generated');
     assert.ok(doctorToken, 'Doctor token generated');

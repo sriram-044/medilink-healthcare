@@ -18,4 +18,8 @@ const InsuranceClaimSchema = new mongoose.Schema({
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 });
 
+// Step 7: Database indexes for insurance claim queries
+InsuranceClaimSchema.index({ patientId: 1, claimDate: -1 });
+InsuranceClaimSchema.index({ status: 1, claimDate: -1 });
+
 module.exports = mongoose.model('InsuranceClaim', InsuranceClaimSchema);

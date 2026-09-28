@@ -70,6 +70,10 @@ async function requireAuth(...allowedRoles) {
     redirectToPortal(user.role);
     return false;
   }
+  
+  // Initialize Real-Time WebSockets automatically for authorized users
+  initRealtime();
+  
   return user;
 }
 
@@ -141,8 +145,16 @@ async function apiRequest(endpoint, options = {}) {
     return null;
   }
 
-  const data = await response.json();
-  return { ok: response.ok, status: response.status, data };
+  const json = await response.json();
+  const isPaginated = json && typeof json === 'object' && Array.isArray(json.data) && json.pagination;
+  const data = isPaginated ? json.data : json;
+  return {
+    ok: response.ok,
+    status: response.status,
+    data,
+    pagination: isPaginated ? json.pagination : null,
+    raw: json
+  };
 }
 
 // ─── UI Utilities ─────────────────────────────────────────────────────────
@@ -241,4 +253,35 @@ function initSidebar(activeId) {
     const active = document.getElementById(activeId);
     if (active) active.classList.add('active');
   }
+}
+
+let socket = null;
+
+function initRealtime() {
+  if (socket) return; // already initialized
+  
+  const script = document.createElement('script');
+  script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+  script.onload = () => {
+    socket = io(BACKEND_URL, {
+      withCredentials: true
+    });
+    
+    socket.on('connect', () => {
+      console.log('Real-time notifications connected.');
+    });
+    
+    socket.on('notification', (payload) => {
+      const type = payload.severity === 'Critical' ? 'error' : (payload.severity === 'Warning' ? 'warning' : 'info');
+      showToast(`<strong>${payload.title}</strong><br/>${payload.message}`, type);
+      
+      // Optionally trigger a custom event that pages can listen to for UI updates (like fetching new reports)
+      window.dispatchEvent(new CustomEvent('carelink:notification', { detail: payload }));
+    });
+    
+    socket.on('connect_error', (err) => {
+      console.error('Socket connect error:', err.message);
+    });
+  };
+  document.head.appendChild(script);
 }

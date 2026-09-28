@@ -25,4 +25,9 @@ const AlertSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Step 7: Database indexes for clinical and emergency alert monitoring
+AlertSchema.index({ patientId: 1, createdAt: -1 });
+AlertSchema.index({ doctorId: 1, resolved: 1, createdAt: -1 });
+AlertSchema.index({ type: 1, resolved: 1 });
+
 module.exports = mongoose.model('Alert', AlertSchema);

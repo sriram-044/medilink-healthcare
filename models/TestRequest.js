@@ -24,6 +24,11 @@ const TestRequestSchema = new mongoose.Schema({
     type: String,
     default: 'CareLink Central Hospital'
   },
+  assignedLabStaff: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   testName: {
     type: String,
     required: true,
@@ -77,5 +82,11 @@ TestRequestSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
 });
+
+// Step 7: Database indexes for frequently queried lab test workflows
+TestRequestSchema.index({ patientId: 1, requestDate: -1 });
+TestRequestSchema.index({ doctorId: 1, requestDate: -1 });
+TestRequestSchema.index({ status: 1, priority: 1, requestDate: -1 });
+TestRequestSchema.index({ assignedLabStaff: 1, status: 1 });
 
 module.exports = mongoose.model('TestRequest', TestRequestSchema);

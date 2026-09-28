@@ -6,6 +6,7 @@
 
 const Alert = require('../models/Alert');
 const Notification = require('../models/Notification');
+const { sendToUser } = require('./socket');
 
 // Configurable Reference Ranges and Critical Thresholds
 const DEFAULT_REFERENCE_RANGES = {
@@ -155,7 +156,7 @@ async function triggerCriticalResultAlert({ report, patient, doctorId, hospitalN
 
     // 2. Create Notification for Assigned Doctor
     if (doctorId || report.doctorId) {
-      await new Notification({
+      const docNotification = new Notification({
         recipientId: doctorId || report.doctorId,
         role: 'doctor',
         type: 'critical_alert',
@@ -163,12 +164,14 @@ async function triggerCriticalResultAlert({ report, patient, doctorId, hospitalN
         message: `${reportType} contains values exceeding critical thresholds. Please review report immediately.`,
         reportId: report._id,
         severity: 'Critical'
-      }).save();
+      });
+      await docNotification.save();
+      sendToUser(docNotification.recipientId, 'notification', docNotification.toObject());
     }
 
     // 3. Create Notification for Patient (Informational)
     if (patient?._id || report.patientId) {
-      await new Notification({
+      const patNotification = new Notification({
         recipientId: patient?._id || report.patientId,
         role: 'patient',
         type: 'report_published',
@@ -176,7 +179,9 @@ async function triggerCriticalResultAlert({ report, patient, doctorId, hospitalN
         message: `Your ${reportType} results have been uploaded and forwarded to Dr. ${patient?.assignedDoctor?.name || 'assigned physician'} for clinical review.`,
         reportId: report._id,
         severity: 'Warning'
-      }).save();
+      });
+      await patNotification.save();
+      sendToUser(patNotification.recipientId, 'notification', patNotification.toObject());
     }
 
     console.log(`[CRITICAL DETECTION] Alert & Notifications logged for report: ${report.reportId} (${patientName})`);

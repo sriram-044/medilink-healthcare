@@ -59,4 +59,9 @@ const NotificationSchema = new mongoose.Schema({
   }
 });
 
+// Step 7: Database indexes for notification delivery and recipient isolation
+NotificationSchema.index({ recipientId: 1, createdAt: -1 });
+NotificationSchema.index({ recipientId: 1, isRead: 1 });
+NotificationSchema.index({ role: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Notification', NotificationSchema);

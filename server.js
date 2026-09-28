@@ -1,4 +1,16 @@
 require('dotenv').config();
+const { validateEnv, sanitizeSecrets } = require('./config/env');
+const { validateAiConfig } = require('./utils/ai/aiConfig');
+
+// Enforce production secrets & configuration hardening
+validateEnv();
+
+// Enforce AI configuration validation at startup
+const aiValidation = validateAiConfig();
+if (!aiValidation.isValid) {
+  throw new Error(`AI configuration error: ${aiValidation.error}`);
+}
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -10,6 +22,8 @@ const mongoSanitize = require('mongo-sanitize');
 const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
 const connectDB = require('./config/db');
+const requestIdMiddleware = require('./middleware/requestId');
+const { errorHandler, apiNotFoundHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -32,9 +46,40 @@ app.locals.clearAuthCookie = (res) => {
 // Connect to MongoDB
 connectDB();
 
-// ─── Security Headers ──────────────────────────────────────────────────────
+// ─── Security Headers & Content Security Policy (CSP) ──────────────────────
+const isProduction = process.env.NODE_ENV === 'production';
+const isReportOnly = process.env.CSP_REPORT_ONLY === 'true';
+
+const connectSrc = ["'self'", "https://carelink-api-3vzd.onrender.com", "https://accounts.google.com"];
+if (process.env.CLIENT_URL && !connectSrc.includes(process.env.CLIENT_URL)) {
+  connectSrc.push(process.env.CLIENT_URL);
+}
+
+const formAction = ["'self'", "https://accounts.google.com"];
+if (process.env.CLIENT_URL && !formAction.includes(process.env.CLIENT_URL)) {
+  formAction.push(process.env.CLIENT_URL);
+}
+
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled to allow inline CSS/JS in frontend
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.googleusercontent.com"],
+      connectSrc,
+      frameSrc: ["'self'", "https://accounts.google.com"],
+      frameAncestors: ["'self'"],
+      formAction,
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      reportUri: ['/api/csp-report'],
+      upgradeInsecureRequests: isProduction ? [] : null
+    },
+    reportOnly: isReportOnly
+  },
   crossOriginEmbedderPolicy: false
 }));
 
@@ -54,6 +99,9 @@ app.use(cors({
   credentials: true
 }));
 
+// ─── Request Correlation ID ────────────────────────────────────────────────
+app.use(requestIdMiddleware);
+
 // ─── Body Parsers & Cookie Parser ─────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -69,19 +117,43 @@ app.use((req, _res, next) => {
 });
 
 // ─── Rate Limiters ────────────────────────────────────────────────────────
+const createRateLimitHandler = (message) => (req, res, _next, options) => {
+  res.status(options.statusCode || 429).json({
+    success: false,
+    error: {
+      code: 'TOO_MANY_REQUESTS',
+      message,
+      requestId: req.id
+    },
+    message
+  });
+};
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: process.env.NODE_ENV === 'production' ? 20 : (process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true' ? 10000 : 100),
   standardHeaders: true,
   legacyHeaders: false,
-  message: { message: 'Too many login attempts. Please try again in 15 minutes.' }
+  handler: createRateLimitHandler('Too many login attempts. Please try again in 15 minutes.')
 });
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 200,
-  message: { message: 'Too many requests. Please slow down.' }
+  max: process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true' ? 10000 : 200,
+  handler: createRateLimitHandler('Too many requests. Please slow down.')
 });
+
+// ─── Test-Only Rate Limit Reset ───────────────────────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/api/__test/reset-rate-limit', (req, res) => {
+    const ips = [req.ip, '::1', '127.0.0.1', '::ffff:127.0.0.1'];
+    ips.forEach(ip => {
+      if (loginLimiter.resetKey) loginLimiter.resetKey(ip);
+      if (apiLimiter.resetKey) apiLimiter.resetKey(ip);
+    });
+    res.status(200).json({ success: true, message: 'Rate limits reset for ' + ips.join(', ') });
+  });
+}
 
 // Apply limiters
 app.use('/api/auth/login', loginLimiter);
@@ -89,7 +161,7 @@ app.use('/api', apiLimiter);
 
 // ─── Session & Passport ───────────────────────────────────────────────────
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'carelink_session_secret',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -102,7 +174,13 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ─── Static Files ─────────────────────────────────────────────────────────
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// NOTE: /uploads is intentionally NOT served as a static directory.
+// Medical files are protected by authentication and authorization.
+// Access medical files through: GET /api/medical-reports/:id/view
+//                            or: GET /api/medical-reports/:id/download
+app.use('/uploads', (_req, res) => {
+  res.status(404).json({ message: 'Direct file access is disabled. Use authenticated API endpoints.' });
+});
 app.use(express.static(path.join(__dirname, 'frontend')));
 
 // ─── Scheduled Jobs ───────────────────────────────────────────────────────
@@ -124,24 +202,38 @@ app.use('/api/insurance', require('./routes/insurance'));
 app.use('/api/emergency', require('./routes/emergency'));
 app.use('/api/admin', require('./routes/admin'));
 
+// ─── CSP Violation Reporting ───────────────────────────────────────────────
+app.post('/api/csp-report', express.json({ type: ['application/json', 'application/csp-report'] }), (req, res) => {
+  const report = req.body && (req.body['csp-report'] || req.body);
+  if (report) {
+    console.warn('[CSP VIOLATION REPORT]', {
+      blockedURI: report['blocked-uri'] || report.blockedURL,
+      violatedDirective: report['violated-directive'] || report.effectiveDirective,
+      documentURI: report['document-uri'] || report.documentURL,
+      disposition: report.disposition || (isReportOnly ? 'report-only' : 'enforce')
+    });
+  }
+  res.status(204).end();
+});
+
 // ─── Health Check ─────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
+app.get(['/api/health', '/health'], (_req, res) => {
   res.json({ status: 'CareLink API is running ✅', timestamp: new Date() });
 });
 
-// ─── Global Error Handler ─────────────────────────────────────────────────
-app.use((err, _req, res, _next) => {
-  console.error('[ERROR]', err.message);
-  res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
-});
+// ─── 404 API Route Handler ────────────────────────────────────────────────
+app.all('/api/*', apiNotFoundHandler);
 
-// ─── Catch-all: serve frontend ────────────────────────────────────────────
+// ─── Catch-all: serve frontend SPA ────────────────────────────────────────
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
 });
 
+// ─── Centralized Error Handler ─────────────────────────────────────────────
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════╗
   ║   🏥 CareLink Server Running         ║
@@ -151,5 +243,9 @@ app.listen(PORT, () => {
   ╚═══════════════════════════════════════╝
   `);
 });
+
+// Initialize WebSocket server
+const { initSocket } = require('./utils/socket');
+initSocket(server);
 
 module.exports = app;

@@ -135,6 +135,15 @@ const MedicalReportSchema = new mongoose.Schema({
   reviewedAt: {
     type: Date
   },
+  extractedText: {
+    type: String,
+    select: false // Avoid sending raw text to frontend by default
+  },
+  documentClassification: {
+    type: String,
+    enum: ['CBC', 'Blood Test', 'Prescription', 'Discharge Summary', 'Diagnostic Report', 'Insurance Document', 'Unknown'],
+    default: 'Unknown'
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -149,5 +158,12 @@ MedicalReportSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
 });
+
+// Step 7: Database indexes for frequently queried report workflows
+MedicalReportSchema.index({ patientId: 1, testDate: -1 });
+MedicalReportSchema.index({ doctorId: 1, testDate: -1 });
+MedicalReportSchema.index({ category: 1, reportStatus: 1, testDate: -1 });
+MedicalReportSchema.index({ criticalStatus: 1, testDate: -1 });
+MedicalReportSchema.index({ testRequestId: 1 });
 
 module.exports = mongoose.model('MedicalReport', MedicalReportSchema);

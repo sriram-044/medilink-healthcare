@@ -4,12 +4,22 @@ const passport = require('passport');
 const jwt = require('jsonwebtoken');
 
 // Step 1: Redirect user to Google
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google', (req, res, next) => {
+  if (!passport._strategy('google')) {
+    return res.status(503).json({ message: 'Google OAuth is not configured on this server.' });
+  }
+  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
 
 // Step 2: Google redirects back here after auth
 // SECURITY: JWT is set as an httpOnly cookie and NEVER placed in the URL.
 router.get('/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/?error=google_failed' }),
+  (req, res, next) => {
+    if (!passport._strategy('google')) {
+      return res.redirect('/?error=google_not_configured');
+    }
+    passport.authenticate('google', { session: false, failureRedirect: '/?error=google_failed' })(req, res, next);
+  },
   (req, res) => {
     const user = req.user;
     const token = jwt.sign(

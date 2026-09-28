@@ -20,4 +20,7 @@ const VitalSignsSchema = new mongoose.Schema({
   recordedAt: { type: Date, default: Date.now }
 });
 
+// Step 7: Database index for latest vitals and chronological stream queries
+VitalSignsSchema.index({ patientId: 1, recordedAt: -1 });
+
 module.exports = mongoose.model('VitalSigns', VitalSignsSchema);

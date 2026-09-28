@@ -12,12 +12,16 @@ const MedicalReport = require('../models/MedicalReport');
 const User = require('../models/User');
 const Alert = require('../models/Alert');
 const Notification = require('../models/Notification');
+const notificationService = require('../utils/notificationService');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
+const { escapeRegex, buildDateQuery, isValidObjectId } = require('../utils/queryHelper');
+const { parsePagination, formatPaginatedResponse } = require('../utils/paginationHelper');
+const { BadRequestError, NotFoundError } = require('../utils/errors');
 
 // ─── GET /api/lab/dashboard ───────────────────────────────────────────────────
 // Real-time KPI summary counts and recent activities from database
-router.get('/dashboard', auth, role('lab', 'admin', 'doctor', 'hospital'), async (req, res) => {
+router.get('/dashboard', auth, role('lab', 'admin', 'doctor', 'hospital'), async (req, res, next) => {
   try {
     const [
       pendingTestsCount,
@@ -68,47 +72,75 @@ router.get('/dashboard', auth, role('lab', 'admin', 'doctor', 'hospital'), async
       }, {})
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/lab/test-requests ───────────────────────────────────────────────
 // List test requests with query filters
-router.get('/test-requests', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res) => {
+router.get('/test-requests', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
-    const { status, priority, category, patientId, search } = req.query;
+    const { status, priority, category, patientId, doctorId, startDate, endDate, search } = req.query;
     const query = {};
 
     if (status) query.status = status;
     if (priority) query.priority = priority;
     if (category) query.testCategory = category;
-    if (patientId && mongoose.Types.ObjectId.isValid(patientId)) query.patientId = patientId;
+    if (patientId && isValidObjectId(patientId)) query.patientId = patientId;
+    if (doctorId && isValidObjectId(doctorId)) query.doctorId = doctorId;
 
-    let requests = await TestRequest.find(query)
-      .populate('patientId', 'name email age gender phone roomLocation bloodGroup')
-      .populate('doctorId', 'name specialization phone')
-      .populate('sampleId')
-      .populate('reportId')
-      .sort({ requestDate: -1 });
-
-    if (search) {
-      const q = search.toLowerCase();
-      requests = requests.filter(r =>
-        (r.requestId && r.requestId.toLowerCase().includes(q)) ||
-        (r.testName && r.testName.toLowerCase().includes(q)) ||
-        (r.patientId?.name && r.patientId.name.toLowerCase().includes(q)) ||
-        (r.doctorId?.name && r.doctorId.name.toLowerCase().includes(q))
-      );
+    // Database-level date range filtering
+    const dateQuery = buildDateQuery(startDate, endDate, 'requestDate');
+    if (dateQuery) {
+      Object.assign(query, dateQuery);
     }
 
-    res.json(requests);
+    if (search && search.trim()) {
+      const safe = escapeRegex(search.trim());
+      // Match test requests by requestId or testName, or by matching patient/doctor names
+      const matchingUsers = await User.find({
+        name: { $regex: safe, $options: 'i' }
+      }).select('_id');
+      const userIds = matchingUsers.map(u => u._id);
+
+      const searchOr = [
+        { requestId: { $regex: safe, $options: 'i' } },
+        { testName: { $regex: safe, $options: 'i' } }
+      ];
+
+      if (userIds.length > 0) {
+        searchOr.push({ patientId: { $in: userIds } });
+        searchOr.push({ doctorId: { $in: userIds } });
+      }
+
+      query.$or = searchOr;
+    }
+
+    const pagination = parsePagination(req);
+    if (!pagination.isValid) {
+      return next(new BadRequestError(pagination.error));
+    }
+
+    const [total, requests] = await Promise.all([
+      TestRequest.countDocuments(query),
+      TestRequest.find(query)
+        .populate('patientId', 'name email age gender phone roomLocation bloodGroup')
+        .populate('doctorId', 'name specialization phone')
+        .populate('sampleId')
+        .populate('reportId')
+        .sort({ requestDate: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+    ]);
+
+    res.json(formatPaginatedResponse(requests, total, pagination.page, pagination.limit));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/lab/test-requests/:id ───────────────────────────────────────────
-router.get('/test-requests/:id', auth, async (req, res) => {
+router.get('/test-requests/:id', auth, async (req, res, next) => {
   try {
     const request = await TestRequest.findById(req.params.id)
       .populate('patientId', 'name email age gender phone roomLocation bloodGroup allergies medicalHistory')
@@ -116,26 +148,27 @@ router.get('/test-requests/:id', auth, async (req, res) => {
       .populate('sampleId')
       .populate('reportId');
 
-    if (!request) return res.status(404).json({ message: 'Test request not found' });
+    if (!request) return next(new NotFoundError('Test request not found'));
     res.json(request);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── POST /api/lab/test-requests ──────────────────────────────────────────────
 // Create new test request (Doctor, Lab, or Admin)
-router.post('/test-requests', auth, role('doctor', 'lab', 'admin', 'hospital'), async (req, res) => {
+router.post('/test-requests', auth, role('doctor', 'lab', 'admin', 'hospital'), async (req, res, next) => {
   try {
-    const { patientId, testName, testCategory, priority, clinicalNotes, hospitalName, doctorId } = req.body;
+    const { patientId, testName, testCategory, priority, clinicalNotes, hospitalName, doctorId, assignedLabStaff } = req.body;
 
     if (!patientId || !testName) {
-      return res.status(400).json({ message: 'Patient ID and Test Name are required.' });
+      return next(new BadRequestError('Patient ID and Test Name are required.'));
     }
 
     const testRequest = new TestRequest({
       patientId,
       doctorId: req.user.role === 'doctor' ? req.user._id : (doctorId || null),
+      assignedLabStaff: assignedLabStaff || null,
       hospitalName: hospitalName || 'CareLink Central Hospital',
       testName,
       testCategory: testCategory || 'Laboratory',
@@ -160,26 +193,18 @@ router.post('/test-requests', auth, role('doctor', 'lab', 'admin', 'hospital'), 
       await testRequest.save();
     }
 
-    // Create notification for Lab Staff
-    await new Notification({
-      recipientId: req.user._id, // placeholder recipient / broadcast
-      role: 'lab',
-      type: 'test_requested',
-      title: `📋 New Test Request: ${testName}`,
-      message: `Priority: ${priority || 'Normal'} for patient. Request ID: ${testRequest.requestId}`,
-      testRequestId: testRequest._id,
-      severity: priority === 'Critical' ? 'Critical' : (priority === 'Urgent' ? 'Warning' : 'Normal')
-    }).save();
+    // Dispatch notification to Lab Staff via notificationService
+    await notificationService.notifyLabTestRequest(testRequest, req.user);
 
     res.status(201).json({ message: 'Test request created successfully', testRequest });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── PUT /api/lab/test-requests/:id/status ─────────────────────────────────────
 // Update test request status ('Pending', 'Sample Collected', 'Processing', 'Completed', 'Cancelled')
-router.put('/test-requests/:id/status', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res) => {
+router.put('/test-requests/:id/status', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const { status, clinicalNotes } = req.body;
     const updateData = { status };
@@ -206,50 +231,77 @@ router.put('/test-requests/:id/status', auth, role('lab', 'doctor', 'admin', 'ho
 
     res.json({ message: `Test request updated to ${status}`, request });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/lab/samples ─────────────────────────────────────────────────────
 // List samples with query filters
-router.get('/samples', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res) => {
+router.get('/samples', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
-    const { status, sampleType, patientId, search } = req.query;
+    const { status, sampleType, patientId, testRequestId, startDate, endDate, search } = req.query;
     const query = {};
 
     if (status) query.status = status;
     if (sampleType) query.sampleType = sampleType;
-    if (patientId && mongoose.Types.ObjectId.isValid(patientId)) query.patientId = patientId;
+    if (patientId && isValidObjectId(patientId)) query.patientId = patientId;
+    if (testRequestId && isValidObjectId(testRequestId)) query.testRequestId = testRequestId;
 
-    let samples = await Sample.find(query)
-      .populate('patientId', 'name email age gender phone roomLocation')
-      .populate('testRequestId', 'requestId testName testCategory priority')
-      .sort({ collectionDate: -1 });
-
-    if (search) {
-      const q = search.toLowerCase();
-      samples = samples.filter(s =>
-        (s.sampleId && s.sampleId.toLowerCase().includes(q)) ||
-        (s.barcode && s.barcode.toLowerCase().includes(q)) ||
-        (s.patientId?.name && s.patientId.name.toLowerCase().includes(q)) ||
-        (s.sampleType && s.sampleType.toLowerCase().includes(q))
-      );
+    // Database-level date range filtering
+    const dateQuery = buildDateQuery(startDate, endDate, 'collectionDate');
+    if (dateQuery) {
+      Object.assign(query, dateQuery);
     }
 
-    res.json(samples);
+    if (search && search.trim()) {
+      const safe = escapeRegex(search.trim());
+      const matchingUsers = await User.find({
+        name: { $regex: safe, $options: 'i' }
+      }).select('_id');
+      const userIds = matchingUsers.map(u => u._id);
+
+      const searchOr = [
+        { sampleId: { $regex: safe, $options: 'i' } },
+        { barcode: { $regex: safe, $options: 'i' } },
+        { sampleType: { $regex: safe, $options: 'i' } }
+      ];
+
+      if (userIds.length > 0) {
+        searchOr.push({ patientId: { $in: userIds } });
+      }
+
+      query.$or = searchOr;
+    }
+
+    const pagination = parsePagination(req);
+    if (!pagination.isValid) {
+      return next(new BadRequestError(pagination.error));
+    }
+
+    const [total, samples] = await Promise.all([
+      Sample.countDocuments(query),
+      Sample.find(query)
+        .populate('patientId', 'name email age gender phone roomLocation')
+        .populate('testRequestId', 'requestId testName testCategory priority')
+        .sort({ collectionDate: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+    ]);
+
+    res.json(formatPaginatedResponse(samples, total, pagination.page, pagination.limit));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── POST /api/lab/samples ────────────────────────────────────────────────────
 // Register new sample
-router.post('/samples', auth, role('lab', 'admin', 'hospital'), async (req, res) => {
+router.post('/samples', auth, role('lab', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const { patientId, testRequestId, sampleType, collectedBy, notes, storageLocation } = req.body;
 
     if (!patientId || !sampleType) {
-      return res.status(400).json({ message: 'Patient ID and Sample Type are required.' });
+      return next(new BadRequestError('Patient ID and Sample Type are required.'));
     }
 
     const sample = new Sample({
@@ -273,13 +325,13 @@ router.post('/samples', auth, role('lab', 'admin', 'hospital'), async (req, res)
 
     res.status(201).json({ message: 'Sample registered successfully', sample });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── PUT /api/lab/samples/:id ─────────────────────────────────────────────────
 // Update sample status and metadata
-router.put('/samples/:id', auth, role('lab', 'admin', 'hospital'), async (req, res) => {
+router.put('/samples/:id', auth, role('lab', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const { status, collectedBy, notes, rejectionReason, storageLocation, barcode } = req.body;
     const updateData = {};
@@ -294,7 +346,7 @@ router.put('/samples/:id', auth, role('lab', 'admin', 'hospital'), async (req, r
       .populate('patientId', 'name email age gender')
       .populate('testRequestId', 'requestId testName priority');
 
-    if (!sample) return res.status(404).json({ message: 'Sample not found' });
+    if (!sample) return next(new NotFoundError('Sample not found'));
 
     // Sync linked test request
     if (sample.testRequestId) {
@@ -305,13 +357,13 @@ router.put('/samples/:id', auth, role('lab', 'admin', 'hospital'), async (req, r
 
     res.json({ message: `Sample status updated to ${status || 'updated'}`, sample });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/lab/patients/search ─────────────────────────────────────────────
 // Multi-field patient search with previous reports history
-router.get('/patients/search', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res) => {
+router.get('/patients/search', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const { q } = req.query;
     let query = { role: 'patient' };
@@ -323,13 +375,14 @@ router.get('/patients/search', auth, role('lab', 'doctor', 'admin', 'hospital'),
       if (isObjectId) {
         query = { role: 'patient', _id: term };
       } else {
+        const safeTerm = escapeRegex(term);
         query = {
           role: 'patient',
           $or: [
-            { name: { $regex: term, $options: 'i' } },
-            { email: { $regex: term, $options: 'i' } },
-            { phone: { $regex: term, $options: 'i' } },
-            { bloodGroup: { $regex: term, $options: 'i' } }
+            { name: { $regex: safeTerm, $options: 'i' } },
+            { email: { $regex: safeTerm, $options: 'i' } },
+            { phone: { $regex: safeTerm, $options: 'i' } },
+            { bloodGroup: { $regex: safeTerm, $options: 'i' } }
           ]
         };
       }
@@ -342,33 +395,35 @@ router.get('/patients/search', auth, role('lab', 'doctor', 'admin', 'hospital'),
 
     // Fetch previous reports count & list for each found patient
     const results = await Promise.all(patients.map(async p => {
-      const reports = await MedicalReport.find({ patientId: p._id })
-        .select('reportId category reportType fileFormat reportStatus criticalStatus testDate reportDate fileName fileUrl')
-        .sort({ testDate: -1 })
-        .limit(5);
-
-      const testRequests = await TestRequest.find({ patientId: p._id })
-        .select('requestId testName priority status requestDate')
-        .sort({ requestDate: -1 })
-        .limit(5);
+      const [reports, testRequests, totalReportsCount] = await Promise.all([
+        MedicalReport.find({ patientId: p._id })
+          .select('reportId category reportType fileFormat reportStatus criticalStatus testDate reportDate fileName fileUrl')
+          .sort({ testDate: -1 })
+          .limit(5),
+        TestRequest.find({ patientId: p._id })
+          .select('requestId testName priority status requestDate')
+          .sort({ requestDate: -1 })
+          .limit(5),
+        MedicalReport.countDocuments({ patientId: p._id })
+      ]);
 
       return {
         ...p.toObject(),
         previousReports: reports,
         recentRequests: testRequests,
-        totalReportsCount: reports.length
+        totalReportsCount
       };
     }));
 
     res.json(results);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/lab/critical-results ────────────────────────────────────────────
 // Dedicated high-urgency queue for critical findings
-router.get('/critical-results', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res) => {
+router.get('/critical-results', auth, role('lab', 'doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const criticalReports = await MedicalReport.find({ criticalStatus: 'Critical' })
       .populate('patientId', 'name email age gender phone roomLocation caregiverPhone emergencyContact')
@@ -386,20 +441,22 @@ router.get('/critical-results', auth, role('lab', 'doctor', 'admin', 'hospital')
       totalCritical: criticalReports.length + criticalRequests.length
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/lab/notifications ───────────────────────────────────────────────
-router.get('/notifications', auth, role('lab', 'admin'), async (req, res) => {
+router.get('/notifications', auth, role('lab', 'admin'), async (req, res, next) => {
   try {
-    const notifications = await Notification.find({
-      $or: [{ role: 'lab' }, { recipientId: req.user._id }]
-    }).sort({ createdAt: -1 }).limit(30);
+    const query = req.user.role === 'admin'
+      ? { $or: [{ role: 'lab' }, { recipientId: req.user._id }] }
+      : { recipientId: req.user._id };
+
+    const notifications = await Notification.find(query).sort({ createdAt: -1 }).limit(30);
 
     res.json(notifications);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 

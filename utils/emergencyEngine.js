@@ -7,6 +7,8 @@
 const Alert = require('../models/Alert');
 const EmergencyCase = require('../models/EmergencyCase');
 const notificationService = require('./notificationService');
+const emergencyCommunicationService = require('./emergencyCommunicationService');
+
 
 /**
  * Triggers emergency workflow when AI score >= 70 or fall detected or SOS triggered
@@ -151,6 +153,17 @@ const triggerEmergencyWorkflow = async ({
 
       // Broadcast multi-party notifications and record in timeline
       await notificationService.broadcastEmergencyAlert(emergencyCase);
+      await emergencyCase.save();
+      
+      const commResult = await emergencyCommunicationService.dispatchSOS(patient, emergencyCase, contactsList);
+      emergencyCase.timeline.push({
+        event: 'COMMUNICATION_DISPATCH',
+        message: `External SOS communication ${commResult.success ? 'initiated' : 'failed'} to ${commResult.targetPhone || 'None'}. [Mocked: ${commResult.mocked}]`,
+        timestamp: new Date(),
+        performedBy: patient._id,
+        performedByName: 'System Bot',
+        performedByRole: 'system'
+      });
       await emergencyCase.save();
     } else {
       // Append update event to existing case

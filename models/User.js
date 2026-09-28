@@ -45,4 +45,8 @@ const UserSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Step 7: Database indexes for frequently queried fields
+UserSchema.index({ role: 1, assignedDoctor: 1 });
+UserSchema.index({ googleId: 1 }, { sparse: true });
+
 module.exports = mongoose.model('User', UserSchema);

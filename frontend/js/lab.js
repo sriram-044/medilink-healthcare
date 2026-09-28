@@ -1191,13 +1191,7 @@ async function openMedicalReportViewer(reportId) {
   if (format === 'PDF') {
     box.innerHTML = `
       <div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;background:#000;height:480px">
-        <object data="${fileViewUrl}" type="application/pdf" width="100%" height="100%">
-          <div class="empty-state">
-            <div class="empty-icon">📄</div>
-            <div class="empty-text">PDF Preview Stream Ready</div>
-            <a href="${fileViewUrl}" target="_blank" class="btn btn-primary btn-sm" style="margin-top:10px">Open PDF in Tab</a>
-          </div>
-        </object>
+        <iframe src="${fileViewUrl}" style="width:100%;height:100%;border:none;border-radius:8px"></iframe>
       </div>
     `;
   } else if (['PNG', 'JPG', 'JPEG', 'TIFF', 'TIF'].includes(format)) {

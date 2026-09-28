@@ -588,10 +588,18 @@ let healthWarningTimer = null;
 let healthWarningCountdown = 15;
 let pendingHealthWarningType = 'POSSIBLE_HEALTH_EMERGENCY';
 
+let sosCooldownTimerId = null;
+let isSosInCooldown = false;
+
 /**
  * Opens the SOS Confirmation Modal with 3s hold & 5s auto-countdown
  */
 function openSOSModal() {
+  if (isSosInCooldown) {
+    showToast('SOS alert was recently triggered. Please wait a moment before sending another.', 'warning');
+    return;
+  }
+  
   const modal = document.getElementById('sosConfirmModal');
   if (!modal) return;
 
@@ -748,6 +756,10 @@ async function executeSOSDispatch(emergencyType = 'MANUAL_SOS', customLocation =
   };
 
   try {
+    isSosInCooldown = true;
+    if (sosCooldownTimerId) clearTimeout(sosCooldownTimerId);
+    sosCooldownTimerId = setTimeout(() => { isSosInCooldown = false; }, 30000);
+
     const res = await apiRequest('/emergency/sos', { method: 'POST', body: payload });
     if (res && res.ok) {
       const emg = res.data?.emergencyCase || res.data;

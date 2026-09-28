@@ -1,12 +1,5 @@
 // admin.js — Admin Portal Logic
 
-// Resolve file URL — handles both old relative and new absolute paths
-function getFileUrl(url) {
-  if (!url) return null;
-  if (url.startsWith('http')) return url;
-  return `${BACKEND_URL}${url}`;
-}
-
 let currentUser = null;
 let allUsers = [];
 
@@ -515,7 +508,7 @@ async function loadAdminReports() {
       <td style="text-transform:capitalize">${r.uploadedBy}</td>
       <td>${formatDate(r.createdAt)}</td>
       <td>${getStatusBadge(r.status)}</td>
-      <td>${r.fileUrl ? `<a href="${getFileUrl(r.fileUrl)}" target="_blank" class="btn btn-ghost btn-sm">📥 View</a>` : '—'}</td>
+      <td>${r.fileName ? `<a href="${BACKEND_URL}/api/reports/${r._id}/file" target="_blank" class="btn btn-ghost btn-sm">📥 View</a>` : '—'}</td>
     </tr>
   `).join('');
 }

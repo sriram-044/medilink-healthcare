@@ -28,4 +28,7 @@ const ReportSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Step 7: Database index for legacy patient report queries
+ReportSchema.index({ patientId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Report', ReportSchema);

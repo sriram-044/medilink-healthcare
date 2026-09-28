@@ -25,6 +25,12 @@ const DietPlanSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Step 7: Database indexes for medication and diet plans
+MedicationSchema.index({ patientId: 1, isActive: 1, createdAt: -1 });
+MedicationSchema.index({ doctorId: 1, createdAt: -1 });
+
+DietPlanSchema.index({ patientId: 1, createdAt: -1 });
+
 const Medication = mongoose.model('Medication', MedicationSchema);
 const DietPlan = mongoose.model('DietPlan', DietPlanSchema);
 

@@ -66,4 +66,10 @@ SampleSchema.pre('save', function(next) {
   next();
 });
 
+// Step 7: Database indexes for frequently queried sample workflows
+SampleSchema.index({ testRequestId: 1 });
+SampleSchema.index({ patientId: 1, collectionDate: -1 });
+SampleSchema.index({ status: 1, sampleType: 1, collectionDate: -1 });
+SampleSchema.index({ barcode: 1 }, { sparse: true });
+
 module.exports = mongoose.model('Sample', SampleSchema);

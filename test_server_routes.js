@@ -14,7 +14,7 @@ async function runIntegrationTests() {
     const hData = await hRes.json();
     console.log('Test 1: GET /api/health ->', hRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', hData.status);
 
-    // 2. Authenticate lab user to get JWT token
+    // 2. Authenticate lab user to get JWT cookie
     const loginRes = await fetch(`${BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -23,9 +23,10 @@ async function runIntegrationTests() {
     const loginData = await loginRes.json();
     if (!loginRes.ok) throw new Error('Lab user login failed: ' + (loginData.message || 'unknown'));
 
-    const labToken = loginData.token;
+    const setCookie = loginRes.headers.get('set-cookie') || '';
+    const cookie = setCookie.split(';')[0];
     const headers = {
-      'Authorization': `Bearer ${labToken}`,
+      'Cookie': cookie,
       'Content-Type': 'application/json'
     };
 
@@ -37,17 +38,20 @@ async function runIntegrationTests() {
     // 4. GET /api/lab/test-requests
     const reqRes = await fetch(`${BASE}/lab/test-requests`, { headers });
     const reqData = await reqRes.json();
-    console.log('Test 3: GET /api/lab/test-requests ->', reqRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', `Found ${reqData.length} test requests`);
+    const reqList = Array.isArray(reqData) ? reqData : (reqData.data || []);
+    console.log('Test 3: GET /api/lab/test-requests ->', reqRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', `Found ${reqList.length} test requests`);
 
     // 5. GET /api/lab/samples
     const sampRes = await fetch(`${BASE}/lab/samples`, { headers });
     const sampData = await sampRes.json();
-    console.log('Test 4: GET /api/lab/samples ->', sampRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', `Found ${sampData.length} samples`);
+    const sampList = Array.isArray(sampData) ? sampData : (sampData.data || []);
+    console.log('Test 4: GET /api/lab/samples ->', sampRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', `Found ${sampList.length} samples`);
 
     // 6. GET /api/medical-reports
     const repRes = await fetch(`${BASE}/medical-reports`, { headers });
     const repData = await repRes.json();
-    console.log('Test 5: GET /api/medical-reports ->', repRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', `Found ${repData.length} medical reports across categories`);
+    const repList = Array.isArray(repData) ? repData : (repData.data || []);
+    console.log('Test 5: GET /api/medical-reports ->', repRes.status === 200 ? '✅ 200 OK' : '❌ FAIL', `Found ${repList.length} medical reports across categories`);
 
     // 7. GET /api/lab/critical-results
     const critRes = await fetch(`${BASE}/lab/critical-results`, { headers });

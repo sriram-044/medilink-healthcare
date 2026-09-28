@@ -19,6 +19,7 @@ const Notification = require('../models/Notification');
 
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
+const { NotFoundError, ForbiddenError, BadRequestError } = require('../utils/errors');
 
 const {
   validateMedicalReportFile,
@@ -28,8 +29,12 @@ const {
 } = require('../utils/fileValidator');
 
 const storageService = require('../utils/storageService');
+const { escapeRegex, buildDateQuery, isValidObjectId } = require('../utils/queryHelper');
+const { parsePagination, formatPaginatedResponse } = require('../utils/paginationHelper');
 const { evaluateStructuredResults, triggerCriticalResultAlert, getReferenceRangesCatalog } = require('../utils/criticalDetection');
 const { generateReportAiAnalysis } = require('../utils/reportAiEngine');
+const { processDocument } = require('../utils/documentIntelligence');
+const { sendToUser } = require('../utils/socket');
 
 // Temporary disk storage for Multer before validation & final storage
 const tempUploadDir = path.join(__dirname, '../uploads/temp');
@@ -53,7 +58,7 @@ router.get('/config/categories', auth, (req, res) => {
       storageDriver: storageService.getDriverName()
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -99,6 +104,8 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
     let fileUrl = null;
     let mimeType = null;
     let originalFileName = null;
+    let extractedText = null;
+    let documentClassification = 'Unknown';
 
     // 1. Validate File if provided
     if (req.file) {
@@ -109,7 +116,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       if (!validation.isValid) {
         // Clean up temp file
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        return res.status(400).json({ message: validation.error });
+        return next(new BadRequestError(validation.error));
       }
 
       fileFormat = validation.format || path.extname(originalFileName).replace('.', '').toUpperCase();
@@ -120,6 +127,14 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       // 2. Save via Storage Service
       await storageService.uploadFile(tempFilePath, safeFileName);
       fileUrl = storageService.getFileUrl(safeFileName, req);
+
+      // 2.5 Document Intelligence (Text Extraction & Classification)
+      const docData = await processDocument(tempFilePath, mimeType, reportType);
+      extractedText = docData.text;
+      documentClassification = docData.classification;
+      if (docData.structuredData && (!rawStructuredResults || rawStructuredResults.length === 0)) {
+        rawStructuredResults = docData.structuredData;
+      }
 
       // Remove temp file
       if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
@@ -176,7 +191,9 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       criticalStatus,
       structuredResults: evaluation.evaluatedResults,
       aiAnalysis,
-      patientNote: patientNote || ''
+      patientNote: patientNote || '',
+      extractedText,
+      documentClassification
     });
 
     await medicalReport.save();
@@ -221,7 +238,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       });
     } else if (isPublished) {
       // Standard publication notification
-      await new Notification({
+      const patNotification = new Notification({
         recipientId: patientId,
         role: 'patient',
         type: 'report_published',
@@ -229,7 +246,9 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         message: `Your ${reportType} report has been published to your Lifetime EHR record.`,
         reportId: medicalReport._id,
         severity: 'Normal'
-      }).save();
+      });
+      await patNotification.save();
+      sendToUser(patNotification.recipientId, 'notification', patNotification.toObject());
     }
 
     res.status(201).json({
@@ -241,69 +260,137 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
     if (tempFilePath && fs.existsSync(tempFilePath)) {
       try { fs.unlinkSync(tempFilePath); } catch (_) {}
     }
-    console.error('Report upload error:', err);
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/medical-reports ─────────────────────────────────────────────────
 // List reports with role-based access and multi-field filters
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, async (req, res, next) => {
   try {
-    const { category, reportType, patientId, criticalStatus, reportStatus, search } = req.query;
+    const {
+      category,
+      reportType,
+      patientId,
+      doctorId,
+      criticalStatus,
+      reportStatus,
+      status,
+      uploadedBy,
+      labName,
+      startDate,
+      endDate,
+      search
+    } = req.query;
+
     const query = {};
 
-    // Role-based restrictions
+    // ─── 1. Role-Based Access Control (RBAC) ──────────────────────────────
     if (req.user.role === 'patient') {
+      // Patients are strictly confined to their own reports
       query.patientId = req.user._id;
-      // Patient sees verified and published reports
+      // Patient sees verified, published, or uploaded reports
       query.reportStatus = { $in: ['Verified', 'Published', 'Uploaded'] };
     } else if (req.user.role === 'doctor') {
       // Doctor can see their assigned patients' reports or reports assigned to them
-      if (patientId) {
+      if (patientId && isValidObjectId(patientId)) {
         query.patientId = patientId;
+        query.$or = [{ doctorId: req.user._id }, { patientId: { $in: req.user.assignedPatients || [] } }];
       } else {
         query.$or = [{ doctorId: req.user._id }, { patientId: { $in: req.user.assignedPatients || [] } }];
       }
     } else {
-      // Lab, Hospital, Admin can view all
-      if (patientId && mongoose.Types.ObjectId.isValid(patientId)) {
+      // Lab, Hospital, Admin can view all or filter by patientId / doctorId
+      if (patientId && isValidObjectId(patientId)) {
         query.patientId = patientId;
+      }
+      if (doctorId && isValidObjectId(doctorId)) {
+        query.doctorId = doctorId;
       }
     }
 
+    // ─── 2. Discrete Field Filters (Database-level) ───────────────────────
     if (category) query.category = category;
     if (reportType) query.reportType = reportType;
     if (criticalStatus) query.criticalStatus = criticalStatus;
-    if (reportStatus) query.reportStatus = reportStatus;
-
-    let reports = await MedicalReport.find(query)
-      .populate('patientId', 'name email age gender phone roomLocation bloodGroup')
-      .populate('doctorId', 'name specialization phone email')
-      .populate('testRequestId', 'requestId priority testName')
-      .populate('sampleId', 'sampleId sampleType status')
-      .sort({ testDate: -1, createdAt: -1 });
-
-    if (search) {
-      const q = search.toLowerCase();
-      reports = reports.filter(r =>
-        (r.reportId && r.reportId.toLowerCase().includes(q)) ||
-        (r.reportType && r.reportType.toLowerCase().includes(q)) ||
-        (r.category && r.category.toLowerCase().includes(q)) ||
-        (r.patientId?.name && r.patientId.name.toLowerCase().includes(q)) ||
-        (r.doctorId?.name && r.doctorId.name.toLowerCase().includes(q)) ||
-        (r.labName && r.labName.toLowerCase().includes(q))
-      );
+    if (reportStatus || status) {
+      const targetStatus = reportStatus || status;
+      if (req.user.role !== 'patient') {
+        query.reportStatus = targetStatus;
+      } else if (['Verified', 'Published', 'Uploaded'].includes(targetStatus)) {
+        query.reportStatus = targetStatus;
+      }
+    }
+    if (uploadedBy) query.uploadedBy = uploadedBy;
+    if (labName && labName.trim()) {
+      query.labName = { $regex: escapeRegex(labName.trim()), $options: 'i' };
     }
 
-    res.json(reports);
+    // ─── 3. Date Range Filtering (Database-level) ─────────────────────────
+    const dateQuery = buildDateQuery(startDate, endDate, 'testDate');
+    if (dateQuery) {
+      Object.assign(query, dateQuery);
+    }
+
+    // ─── 4. Search Filter (Database-level) ─────────────────────────────────
+    if (search && search.trim()) {
+      const safe = escapeRegex(search.trim());
+
+      const searchConditions = [
+        { reportId: { $regex: safe, $options: 'i' } },
+        { reportType: { $regex: safe, $options: 'i' } },
+        { category: { $regex: safe, $options: 'i' } },
+        { labName: { $regex: safe, $options: 'i' } }
+      ];
+
+      // If user is not patient, match patient/doctor names in DB
+      const matchingUsers = await User.find({
+        name: { $regex: safe, $options: 'i' }
+      }).select('_id');
+      const userIds = matchingUsers.map(u => u._id);
+
+      if (userIds.length > 0) {
+        if (req.user.role !== 'patient') {
+          searchConditions.push({ patientId: { $in: userIds } });
+        }
+        searchConditions.push({ doctorId: { $in: userIds } });
+      }
+
+      // Safely combine with existing query (preserving doctor RBAC $or if present)
+      if (query.$or) {
+        const existingOr = query.$or;
+        delete query.$or;
+        query.$and = [{ $or: existingOr }, { $or: searchConditions }];
+      } else {
+        query.$or = searchConditions;
+      }
+    }
+
+    const pagination = parsePagination(req);
+    if (!pagination.isValid) {
+      return next(new BadRequestError(pagination.error));
+    }
+
+    const [total, reports] = await Promise.all([
+      MedicalReport.countDocuments(query),
+      MedicalReport.find(query)
+        .populate('patientId', 'name email age gender phone roomLocation bloodGroup')
+        .populate('doctorId', 'name specialization phone email')
+        .populate('testRequestId', 'requestId priority testName')
+        .populate('sampleId', 'sampleId sampleType status')
+        .sort({ testDate: -1, createdAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+    ]);
+
+    res.json(formatPaginatedResponse(reports, total, pagination.page, pagination.limit));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // ─── GET /api/medical-reports/:id ─────────────────────────────────────────────
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, async (req, res, next) => {
   try {
     const report = await MedicalReport.findById(req.params.id)
       .populate('patientId', 'name email age gender phone roomLocation bloodGroup caregiverPhone emergencyContact medicalHistory allergies')
@@ -311,71 +398,177 @@ router.get('/:id', auth, async (req, res) => {
       .populate('testRequestId')
       .populate('sampleId');
 
-    if (!report) return res.status(404).json({ message: 'Medical report not found' });
+    if (!report) return next(new NotFoundError('Medical report not found.'));
 
     // Authorization check
     if (req.user.role === 'patient' && report.patientId._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied to this report.' });
+      return next(new ForbiddenError('Access denied to this report.'));
     }
 
     res.json(report);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
+});
+
+// ─── SHARED: Report File Authorization Helper ────────────────────────────────
+/**
+ * Checks whether req.user is authorized to access the file of `report`.
+ * Returns null if authorized, or a { status, message } object if denied.
+ *
+ * Authorization rules:
+ *   patient  → must own the report (report.patientId === user._id)
+ *   doctor   → must be the named doctor OR have the patient in assignedPatients
+ *   lab      → must have uploaded the report OR be the named lab
+ *   hospital → must be the named hospital (report.hospitalId) or full access if hospitalId absent
+ *   admin    → full access
+ *   others   → deny
+ */
+async function authorizeReportFileAccess(report, user) {
+  const userId = user._id.toString();
+  const role = user.role;
+
+  if (role === 'admin') {
+    return null; // Admins have full access
+  }
+
+  if (role === 'patient') {
+    // Patient must own the report
+    const ownerId = report.patientId?._id
+      ? report.patientId._id.toString()
+      : report.patientId.toString();
+    if (ownerId !== userId) {
+      return { status: 403, message: 'Access denied. You can only access your own medical reports.' };
+    }
+    return null;
+  }
+
+  if (role === 'doctor') {
+    // Doctor must be the named doctor on the report OR have the patient in their assignedPatients
+    const namedDoctorId = report.doctorId
+      ? (report.doctorId._id ? report.doctorId._id.toString() : report.doctorId.toString())
+      : null;
+    if (namedDoctorId === userId) return null; // Named doctor on this report
+
+    // Check assignedPatients on the doctor record
+    const patientId = report.patientId?._id
+      ? report.patientId._id.toString()
+      : report.patientId.toString();
+    const assignedPatients = (user.assignedPatients || []).map(id => id.toString());
+    if (assignedPatients.includes(patientId)) return null;
+
+    return { status: 403, message: 'Access denied. You are not authorized to access this patient\'s reports.' };
+  }
+
+  if (role === 'lab') {
+    // Lab must be the uploader OR the named laboratory
+    const namedLabId = report.laboratoryId
+      ? (report.laboratoryId._id ? report.laboratoryId._id.toString() : report.laboratoryId.toString())
+      : null;
+    if (namedLabId === userId) return null;
+
+    const uploaderId = report.uploaderId
+      ? (report.uploaderId._id ? report.uploaderId._id.toString() : report.uploaderId.toString())
+      : null;
+    if (uploaderId === userId) return null;
+
+    return { status: 403, message: 'Access denied. This report is not associated with your laboratory.' };
+  }
+
+  if (role === 'hospital') {
+    // Hospital must match the named hospitalId, or if none recorded, allow (legacy data)
+    if (!report.hospitalId) return null; // No hospital restriction recorded — allow
+    const namedHospitalId = report.hospitalId._id
+      ? report.hospitalId._id.toString()
+      : report.hospitalId.toString();
+    if (namedHospitalId === userId) return null;
+    return { status: 403, message: 'Access denied. This report is not associated with your hospital.' };
+  }
+
+  // All other roles (pharmacy, insurance, emergency, etc.) → deny
+  return { status: 403, message: 'Access denied. Your role cannot access medical report files.' };
+}
+
+// ─── Shared file streaming helper ─────────────────────────────────────────────
+/**
+ * Resolve trusted filename from DB, verify auth, stream file.
+ * Never constructs filesystem path from URL input.
+ */
+async function streamReportFile(req, res, next, disposition) {
+  try {
+    const report = await MedicalReport.findById(req.params.id)
+      .populate('patientId', 'name _id')
+      .populate('doctorId', 'name _id')
+      .populate('laboratoryId', 'name _id');
+
+    if (!report) {
+      return next(new NotFoundError('Medical report not found.'));
+    }
+
+    // Authorize BEFORE touching any file
+    const denied = await authorizeReportFileAccess(report, req.user);
+    if (denied) {
+      return next(new ForbiddenError(denied.message));
+    }
+
+    if (!report.fileName) {
+      return next(new NotFoundError('No file is attached to this report (structured data only).'));
+    }
+
+    // ─── Secure file resolution ────────────────────────────────────────────
+    // The filename comes ONLY from the database, never from the request URL.
+    // storageService.getFile() resolves it within its own upload directory —
+    // path traversal sequences in a DB-sourced filename would only arrive here
+    // if the DB itself was compromised, not from a URL-injection attack.
+    let fileData;
+    try {
+      fileData = await storageService.getFile(report.fileName);
+    } catch (storageErr) {
+      return next(new NotFoundError('Report file not found in storage. It may have been deleted.'));
+    }
+
+    // Use MIME type from DB (trusted server-side metadata, not from client)
+    const contentType = report.mimeType || 'application/octet-stream';
+    const safeDisplayName = (report.originalFileName || report.fileName)
+      .replace(/["\\]/g, '_'); // Sanitize for Content-Disposition header
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${safeDisplayName}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store'); // Medical data must not be cached
+
+    if (fileData.stat?.size) {
+      res.setHeader('Content-Length', fileData.stat.size);
+    }
+
+    fileData.stream.pipe(res);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── GET /api/medical-reports/:id/file ────────────────────────────────────────
+// Canonical secure file access endpoint.
+// Requires authentication (Step 1 httpOnly cookie) + role-based authorization.
+// Defaults to inline preview for supported formats, attachment for others.
+router.get('/:id/file', auth, async (req, res, next) => {
+  const report = await MedicalReport.findById(req.params.id).select('mimeType fileFormat fileName');
+  const format = (report?.fileFormat || '').toUpperCase();
+  // Inline preview for PDF and images; attachment download for all others
+  const disposition = ['PDF', 'PNG', 'JPG', 'JPEG', 'TIFF'].includes(format) ? 'inline' : 'attachment';
+  return streamReportFile(req, res, next, disposition);
 });
 
 // ─── GET /api/medical-reports/:id/view ────────────────────────────────────────
-// Secure inline preview stream
-router.get('/:id/view', auth, async (req, res) => {
-  try {
-    const report = await MedicalReport.findById(req.params.id);
-    if (!report) return res.status(404).json({ message: 'Medical report not found' });
-
-    if (req.user.role === 'patient' && report.patientId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied to this report file.' });
-    }
-
-    if (!report.fileName) {
-      return res.status(404).json({ message: 'No file attached to this report (structured data only).' });
-    }
-
-    const fileData = await storageService.getFile(report.fileName);
-
-    const mime = report.mimeType || 'application/octet-stream';
-    res.setHeader('Content-Type', mime);
-    res.setHeader('Content-Disposition', `inline; filename="${report.originalFileName || report.fileName}"`);
-
-    fileData.stream.pipe(res);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+// Secure inline preview stream (preserved for existing frontend compatibility).
+router.get('/:id/view', auth, async (req, res, next) => {
+  return streamReportFile(req, res, next, 'inline');
 });
 
 // ─── GET /api/medical-reports/:id/download ────────────────────────────────────
-// Secure download attachment
-router.get('/:id/download', auth, async (req, res) => {
-  try {
-    const report = await MedicalReport.findById(req.params.id);
-    if (!report) return res.status(404).json({ message: 'Medical report not found' });
-
-    if (req.user.role === 'patient' && report.patientId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied.' });
-    }
-
-    if (!report.fileName) {
-      return res.status(404).json({ message: 'No downloadable file attached to this report.' });
-    }
-
-    const fileData = await storageService.getFile(report.fileName);
-    const downloadName = report.originalFileName || report.fileName;
-
-    res.setHeader('Content-Type', report.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
-
-    fileData.stream.pipe(res);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+// Secure download attachment (preserved for existing frontend compatibility).
+router.get('/:id/download', auth, async (req, res, next) => {
+  return streamReportFile(req, res, next, 'attachment');
 });
 
 // ─── PUT /api/medical-reports/:id/publish ──────────────────────────────────────
@@ -391,7 +584,7 @@ router.put('/:id/publish', auth, role('lab', 'doctor', 'admin', 'hospital'), asy
     if (!report) return res.status(404).json({ message: 'Medical report not found' });
 
     // Send notification to Patient
-    await new Notification({
+    const patNotification = new Notification({
       recipientId: report.patientId._id,
       role: 'patient',
       type: 'report_published',
@@ -399,11 +592,13 @@ router.put('/:id/publish', auth, role('lab', 'doctor', 'admin', 'hospital'), asy
       message: `Your ${report.reportType} report is now available in your Lifetime Electronic Health Record.`,
       reportId: report._id,
       severity: report.criticalStatus === 'Critical' ? 'Critical' : 'Normal'
-    }).save();
+    });
+    await patNotification.save();
+    sendToUser(patNotification.recipientId, 'notification', patNotification.toObject());
 
     // Send notification to Doctor if assigned
     if (report.doctorId) {
-      await new Notification({
+      const docNotification = new Notification({
         recipientId: report.doctorId._id,
         role: 'doctor',
         type: 'report_published',
@@ -411,12 +606,14 @@ router.put('/:id/publish', auth, role('lab', 'doctor', 'admin', 'hospital'), asy
         message: `${report.reportType} has been published and is ready for clinical evaluation.`,
         reportId: report._id,
         severity: report.criticalStatus === 'Critical' ? 'Critical' : 'Normal'
-      }).save();
+      });
+      await docNotification.save();
+      sendToUser(docNotification.recipientId, 'notification', docNotification.toObject());
     }
 
     res.json({ message: 'Report published to Patient Lifetime EHR successfully!', report });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -431,7 +628,7 @@ router.put('/:id/archive', auth, role('lab', 'admin', 'doctor'), async (req, res
     if (!report) return res.status(404).json({ message: 'Medical report not found' });
     res.json({ message: 'Report archived successfully', report });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -452,7 +649,7 @@ router.put('/:id/review', auth, role('doctor', 'admin'), async (req, res) => {
     if (!report) return res.status(404).json({ message: 'Medical report not found' });
     res.json({ message: 'Clinical review saved', report });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -487,7 +684,7 @@ router.post('/:id/results', auth, role('lab', 'doctor', 'admin'), async (req, re
 
     res.json({ message: 'Structured test results updated successfully', report });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
@@ -506,7 +703,7 @@ router.delete('/:id', auth, role('lab', 'admin'), async (req, res) => {
     await MedicalReport.findByIdAndDelete(req.params.id);
     res.json({ message: 'Medical report deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 

@@ -6,9 +6,10 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 const { analyzeVitals } = require('../utils/aiEngine');
 const { triggerEmergencyWorkflow } = require('../utils/emergencyEngine');
+const { ForbiddenError } = require('../utils/errors');
 
 // POST /api/vitals — submit new vitals (patient / wearable)
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, async (req, res, next) => {
   try {
     const {
       heartRate, spo2, temperature,
@@ -76,12 +77,12 @@ router.post('/', auth, async (req, res) => {
       emergencyAlert
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // POST /api/vitals/wearable-sync — simulated smartwatch telemetry endpoint
-router.post('/wearable-sync', auth, async (req, res) => {
+router.post('/wearable-sync', auth, async (req, res, next) => {
   try {
     const { heartRate, spo2, temperature, stepCount, fallDetected, roomLocation } = req.body;
     const patientId = req.user.role === 'patient' ? req.user._id : (req.body.patientId || req.user._id);
@@ -125,31 +126,37 @@ router.post('/wearable-sync', auth, async (req, res) => {
       emergencyAlert
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // GET /api/vitals/:patientId/latest — latest vitals
-router.get('/:patientId/latest', auth, async (req, res) => {
+router.get('/:patientId/latest', auth, async (req, res, next) => {
   try {
+    if (req.user.role === 'patient' && req.user._id.toString() !== req.params.patientId) {
+      return next(new ForbiddenError('Access denied'));
+    }
     const vitals = await VitalSigns.findOne({ patientId: req.params.patientId })
       .sort({ recordedAt: -1 });
     res.json(vitals);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
 // GET /api/vitals/:patientId — vitals history
-router.get('/:patientId', auth, async (req, res) => {
+router.get('/:patientId', auth, async (req, res, next) => {
   try {
+    if (req.user.role === 'patient' && req.user._id.toString() !== req.params.patientId) {
+      return next(new ForbiddenError('Access denied'));
+    }
     const limit = parseInt(req.query.limit) || 10;
     const vitals = await VitalSigns.find({ patientId: req.params.patientId })
       .sort({ recordedAt: -1 })
       .limit(limit);
     res.json(vitals);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    next(err);
   }
 });
 
