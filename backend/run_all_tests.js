@@ -37,7 +37,7 @@ async function run() {
     await resetRateLimit();
 
     try {
-      const output = execSync(`node ${file}`, { cwd: 'd:/code/carelink', encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+      const output = execSync(`node ${file}`, { cwd: __dirname, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
       
       let passed = 0;
       let failed = 0;

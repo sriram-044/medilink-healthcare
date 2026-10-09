@@ -591,8 +591,193 @@ let pendingHealthWarningType = 'POSSIBLE_HEALTH_EMERGENCY';
 let sosCooldownTimerId = null;
 let isSosInCooldown = false;
 
+// Emergency SOS Module state & user inputs
+let selectedSosEmergencyType = 'MANUAL_SOS';
+let selectedSosReason = 'General Emergency Assistance';
+let isSosCountdownPaused = false;
+let capturedLocationData = null;
+
 /**
- * Opens the SOS Confirmation Modal with 3s hold & 5s auto-countdown
+ * Populates User Data Module in the SOS Confirmation Modal
+ * (Patient Profile, Medical Info, Emergency Contacts, Live GPS Location)
+ */
+async function populateSosUserDataModal() {
+  const nameEl = document.getElementById('sosModalPatientName');
+  const demoEl = document.getElementById('sosModalPatientDemographics');
+  const bloodEl = document.getElementById('sosModalBloodGroup');
+  const allergiesEl = document.getElementById('sosModalAllergies');
+  const conditionsEl = document.getElementById('sosModalConditions');
+  const medsEl = document.getElementById('sosModalMedications');
+  const contactsListEl = document.getElementById('sosModalContactsList');
+  const locTextEl = document.getElementById('sosModalLocationText');
+  const addrTextEl = document.getElementById('sosModalAddressText');
+
+  // Immediately use currentUser in memory as fast fallback
+  if (currentUser) {
+    if (nameEl) nameEl.textContent = currentUser.name || 'Patient';
+    if (demoEl) demoEl.textContent = `${currentUser.age ? currentUser.age + ' yrs' : ''}${currentUser.gender ? ' • ' + currentUser.gender : ''}${currentUser.phone ? ' • 📞 ' + currentUser.phone : ''}`;
+    if (bloodEl) bloodEl.textContent = `🩸 ${currentUser.bloodGroup || 'Unknown'}`;
+  }
+
+  // Trigger non-blocking Geolocation acquisition
+  if (locTextEl) locTextEl.textContent = '📍 Acquiring Live GPS Telemetry...';
+  if (addrTextEl) addrTextEl.textContent = 'Requesting browser location coordinates...';
+  capturePatientLocation().then((loc) => {
+    capturedLocationData = loc;
+    if (loc && loc.isAvailable) {
+      if (locTextEl) locTextEl.textContent = `📍 GPS Fixed: ${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`;
+      if (addrTextEl) addrTextEl.textContent = `Accuracy: ±${loc.accuracy}m • ${loc.address || 'Active coordinate lock'}`;
+    } else {
+      if (locTextEl) locTextEl.textContent = '📍 GPS Unavailable (Fallback to Registered Address)';
+      if (addrTextEl) addrTextEl.textContent = currentUser?.roomLocation || currentUser?.address || 'Room / Home address on file';
+    }
+  });
+
+  // Fetch full aggregate user data from User Data Module endpoint
+  try {
+    const res = await apiRequest('/emergency/user-data');
+    if (res && res.ok && res.data) {
+      const payload = res.data?.patientProfile ? res.data : (res.data?.data || res.data);
+      const { patientProfile, medicalInfo, emergencyContacts } = payload;
+
+      if (patientProfile) {
+        if (nameEl) nameEl.textContent = patientProfile.name || 'Patient';
+        if (demoEl) demoEl.textContent = `${patientProfile.age ? patientProfile.age + ' yrs' : ''}${patientProfile.gender ? ' • ' + patientProfile.gender : ''} • 📞 ${patientProfile.phone || '—'}`;
+        if (bloodEl) bloodEl.textContent = `🩸 ${patientProfile.bloodGroup || 'Unknown'}`;
+      }
+
+      if (medicalInfo) {
+        if (allergiesEl) {
+          if (medicalInfo.allergiesDetail && medicalInfo.allergiesDetail.length > 0) {
+            allergiesEl.innerHTML = medicalInfo.allergiesDetail.map(a => `
+              <span class="badge" style="background:rgba(255,71,87,0.18); color:#ff6b6b; font-size:10.5px; margin:2px 4px 2px 0; border:1px solid rgba(255,71,87,0.3);">
+                ${a.name} (${a.severity})
+              </span>
+            `).join('');
+          } else if (medicalInfo.allergies && medicalInfo.allergies.length > 0) {
+            allergiesEl.textContent = medicalInfo.allergies.join(', ');
+          } else {
+            allergiesEl.textContent = 'None reported (NKDA)';
+          }
+        }
+
+        if (conditionsEl) {
+          if (medicalInfo.medicalConditionsDetail && medicalInfo.medicalConditionsDetail.length > 0) {
+            conditionsEl.textContent = medicalInfo.medicalConditionsDetail.map(c => `${c.condition} (${c.status})`).join(', ');
+          } else if (medicalInfo.medicalConditions && medicalInfo.medicalConditions.length > 0) {
+            conditionsEl.textContent = medicalInfo.medicalConditions.join(', ');
+          } else {
+            conditionsEl.textContent = 'No chronic conditions on record';
+          }
+        }
+
+        if (medsEl) {
+          if (medicalInfo.currentMedications && medicalInfo.currentMedications.length > 0) {
+            medsEl.textContent = medicalInfo.currentMedications.join(' • ');
+          } else {
+            medsEl.textContent = 'No active medications registered';
+          }
+        }
+      }
+
+      if (contactsListEl) {
+        if (emergencyContacts && emergencyContacts.length > 0) {
+          contactsListEl.innerHTML = emergencyContacts.map(c => `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:4px; border:1px solid var(--border); font-size:11.5px;">
+              <div>
+                <strong style="color:var(--text-primary);">${c.name}</strong>
+                <span style="color:var(--text-muted); font-size:10.5px;">(${c.relationship})</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="color:var(--primary); font-weight:700;">📞 ${c.phone}</span>
+                ${c.isPrimary ? '<span class="badge badge-normal" style="font-size:9px; padding:1px 5px;">PRIMARY</span>' : ''}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          contactsListEl.innerHTML = '<div style="font-size:11.5px; color:var(--text-muted);">No emergency contacts configured</div>';
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[SOS MODAL] Could not load user-data module preview:', err);
+  }
+}
+
+/**
+ * Handle selection of emergency symptom / user input chips
+ */
+function selectSosReason(type, reasonText, buttonEl) {
+  selectedSosEmergencyType = type || 'MANUAL_SOS';
+  selectedSosReason = reasonText || 'General Emergency Assistance';
+
+  document.querySelectorAll('#sosReasonChips .sos-type-chip').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  if (buttonEl) buttonEl.classList.add('active');
+
+  const noteInput = document.getElementById('sosCustomNoteInput');
+  if (noteInput && !noteInput.value) {
+    noteInput.placeholder = `Reason: ${reasonText} (Tap to add details...)`;
+  }
+}
+
+/**
+ * Toggle Pause / Resume on the auto-countdown
+ */
+function togglePauseCountdown() {
+  isSosCountdownPaused = !isSosCountdownPaused;
+  const btn = document.getElementById('btnPauseCountdown');
+  if (btn) {
+    btn.textContent = isSosCountdownPaused ? '▶️ Resume' : '⏸️ Pause';
+    btn.style.color = isSosCountdownPaused ? 'var(--primary)' : 'var(--text-secondary)';
+  }
+  if (isSosCountdownPaused) {
+    showToast('Auto-countdown paused. You can review your info or tap Send when ready.', 'info');
+  } else {
+    showToast('Auto-countdown resumed.', 'info');
+  }
+}
+
+/**
+ * Simulate sensor-detected fall or critical vital anomaly trigger
+ */
+function simulateAutoDetectionTrigger() {
+  selectedSosEmergencyType = 'FALL_ALERT';
+  selectedSosReason = 'Automatic Fall & Impact Sensor Trigger';
+
+  // Highlight Fall chip
+  const chips = document.querySelectorAll('#sosReasonChips .sos-type-chip');
+  chips.forEach(c => {
+    if (c.textContent.includes('Fall')) {
+      c.classList.add('active');
+    } else {
+      c.classList.remove('active');
+    }
+  });
+
+  const noteInput = document.getElementById('sosCustomNoteInput');
+  if (noteInput) {
+    noteInput.value = 'Auto-Sensor: Rapid vertical drop (3.8G) followed by immobility detected.';
+  }
+
+  showToast('🤖 Simulated Automatic Fall Sensor Trigger armed.', 'warning');
+}
+
+/**
+ * Immediate SOS trigger (bypasses countdown)
+ */
+function triggerImmediateSOS() {
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+  stopSOSHold();
+  executeSOSDispatch(selectedSosEmergencyType || 'MANUAL_SOS');
+}
+
+/**
+ * Opens the SOS Confirmation Modal with User Data Module & Emergency SOS Module
  */
 function openSOSModal() {
   if (isSosInCooldown) {
@@ -606,6 +791,33 @@ function openSOSModal() {
   modal.classList.remove('hidden');
   resetSOSHoldProgress();
 
+  // Reset defaults
+  selectedSosEmergencyType = 'MANUAL_SOS';
+  selectedSosReason = 'General Emergency Assistance';
+  isSosCountdownPaused = false;
+  capturedLocationData = null;
+
+  const btnPause = document.getElementById('btnPauseCountdown');
+  if (btnPause) {
+    btnPause.textContent = '⏸️ Pause';
+    btnPause.style.color = 'var(--text-secondary)';
+  }
+
+  const chips = document.querySelectorAll('#sosReasonChips .sos-type-chip');
+  chips.forEach((c, idx) => {
+    if (idx === 0) c.classList.add('active');
+    else c.classList.remove('active');
+  });
+
+  const noteInput = document.getElementById('sosCustomNoteInput');
+  if (noteInput) {
+    noteInput.value = '';
+    noteInput.placeholder = 'Optional: Specific symptoms or note for responders...';
+  }
+
+  // Populate User Data Module info into the modal
+  populateSosUserDataModal();
+
   // Start 5-second auto countdown
   sosCountdownValue = 5;
   const numDisplay = document.getElementById('sosCountdownNumber');
@@ -613,12 +825,13 @@ function openSOSModal() {
 
   if (sosCountdownTimer) clearInterval(sosCountdownTimer);
   sosCountdownTimer = setInterval(() => {
+    if (isSosCountdownPaused) return; // Do not decrement if paused
     sosCountdownValue--;
     if (numDisplay) numDisplay.textContent = Math.max(0, sosCountdownValue);
     if (sosCountdownValue <= 0) {
       clearInterval(sosCountdownTimer);
       sosCountdownTimer = null;
-      executeSOSDispatch('MANUAL_SOS');
+      executeSOSDispatch(selectedSosEmergencyType || 'MANUAL_SOS');
     }
   }, 1000);
 }
@@ -668,7 +881,7 @@ function startSOSHold(e) {
     if (progress >= 1) {
       // Completed 3-second hold
       stopSOSHold();
-      executeSOSDispatch('MANUAL_SOS');
+      executeSOSDispatch(selectedSosEmergencyType || 'MANUAL_SOS');
     } else {
       sosHoldAnimId = requestAnimationFrame(step);
     }
@@ -745,13 +958,17 @@ async function executeSOSDispatch(emergencyType = 'MANUAL_SOS', customLocation =
 
   showToast('📡 Capturing location & dispatching emergency alert...', 'info');
 
-  const locationData = customLocation || await capturePatientLocation();
+  const locationData = customLocation || capturedLocationData || await capturePatientLocation();
+  const userCustomNote = document.getElementById('sosCustomNoteInput')?.value?.trim() || '';
 
   const payload = {
-    emergencyType,
+    emergencyType: emergencyType || selectedSosEmergencyType || 'MANUAL_SOS',
+    reason: selectedSosReason || 'General Emergency Assistance',
     location: locationData,
     recentHealthData: {
-      source: 'Patient App SOS Button'
+      source: 'Patient App SOS Interface',
+      userNote: userCustomNote,
+      symptomsSelected: selectedSosReason
     }
   };
 
@@ -760,7 +977,9 @@ async function executeSOSDispatch(emergencyType = 'MANUAL_SOS', customLocation =
     if (sosCooldownTimerId) clearTimeout(sosCooldownTimerId);
     sosCooldownTimerId = setTimeout(() => { isSosInCooldown = false; }, 30000);
 
-    const res = await apiRequest('/emergency/sos', { method: 'POST', body: payload });
+    const res = await apiRequest('/emergency/manual-sos', { method: 'POST', body: payload })
+      .catch(() => apiRequest('/emergency/sos', { method: 'POST', body: payload }));
+
     if (res && res.ok) {
       const emg = res.data?.emergencyCase || res.data;
       activeEmergencyCaseId = emg._id;
@@ -777,7 +996,7 @@ async function executeSOSDispatch(emergencyType = 'MANUAL_SOS', customLocation =
       document.getElementById('sosSuccessStatus').textContent = emg.status || 'ACTIVE';
       document.getElementById('sosSuccessLocation').textContent = emg.location?.isAvailable
         ? `📍 GPS Shared (${emg.location.latitude?.toFixed(4)}, ${emg.location.longitude?.toFixed(4)})`
-        : '📍 Location Unavailable at Trigger Time';
+        : '📍 Location: Registered Address Fallback';
 
       const successModal = document.getElementById('sosSuccessModal');
       if (successModal) successModal.classList.remove('hidden');
@@ -793,6 +1012,7 @@ async function executeSOSDispatch(emergencyType = 'MANUAL_SOS', customLocation =
     showToast(`Failed to dispatch SOS: ${err.message}`, 'error');
   }
 }
+
 
 function closeSOSSuccessModal() {
   const modal = document.getElementById('sosSuccessModal');
@@ -1227,67 +1447,73 @@ async function loadLifetimeMedicalHistory() {
 
   // 1. Render Hospital Visits Timeline
   const visitsContainer = document.getElementById('hospitalVisitsTimeline');
-  if (!hospitalVisits || !hospitalVisits.length) {
-    visitsContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">🏥</div><div class="empty-text">No hospital admissions or visits recorded yet</div></div>';
-  } else {
-    visitsContainer.innerHTML = hospitalVisits.map(v => `
-      <div class="card" style="border-left: 4px solid var(--primary); background: rgba(17,28,45,0.6);">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
-          <div>
-            <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${v.hospitalName}</div>
-            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-              ${v.visitType} • ${formatDate(v.visitDate)} ${v.doctorName ? `• Attending: ${v.doctorName}` : ''}
+  if (visitsContainer) {
+    if (!hospitalVisits || !hospitalVisits.length) {
+      visitsContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">🏥</div><div class="empty-text">No hospital admissions or visits recorded yet</div></div>';
+    } else {
+      visitsContainer.innerHTML = hospitalVisits.map(v => `
+        <div class="card" style="border-left: 4px solid var(--primary); background: rgba(17,28,45,0.6);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+            <div>
+              <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${v.hospitalName}</div>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                ${v.visitType} • ${formatDate(v.visitDate)} ${v.doctorName ? `• Attending: ${v.doctorName}` : ''}
+              </div>
             </div>
+            <span class="badge ${v.status === 'Discharged' ? 'badge-normal' : v.status === 'Admitted' ? 'badge-critical' : 'badge-reviewed'}">${v.status}</span>
           </div>
-          <span class="badge ${v.status === 'Discharged' ? 'badge-normal' : v.status === 'Admitted' ? 'badge-critical' : 'badge-reviewed'}">${v.status}</span>
+          <div style="font-size:13px; color:var(--text-secondary); margin-top:10px;">
+            <strong>Reason for Visit:</strong> ${v.reason}
+          </div>
+          ${v.diagnosis ? `<div style="font-size:13px; color:var(--primary); margin-top:4px;"><strong>Diagnosis:</strong> ${v.diagnosis}</div>` : ''}
+          ${v.dischargeSummary ? `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-sm); padding:10px; margin-top:8px; font-size:12px; color:var(--text-secondary);">
+              <strong>Discharge Summary:</strong> ${v.dischargeSummary}
+            </div>` : ''}
         </div>
-        <div style="font-size:13px; color:var(--text-secondary); margin-top:10px;">
-          <strong>Reason for Visit:</strong> ${v.reason}
-        </div>
-        ${v.diagnosis ? `<div style="font-size:13px; color:var(--primary); margin-top:4px;"><strong>Diagnosis:</strong> ${v.diagnosis}</div>` : ''}
-        ${v.dischargeSummary ? `
-          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-sm); padding:10px; margin-top:8px; font-size:12px; color:var(--text-secondary);">
-            <strong>Discharge Summary:</strong> ${v.dischargeSummary}
-          </div>` : ''}
-      </div>
-    `).join('');
+      `).join('');
+    }
   }
 
   // 2. Render Allergies List
   const allergiesContainer = document.getElementById('allergiesListContainer');
-  const allergies = allergiesDetail && allergiesDetail.length ? allergiesDetail : (patient?.allergies || []).map(a => ({ name: a, severity: 'Moderate', reaction: 'Reported allergy' }));
+  if (allergiesContainer) {
+    const allergies = allergiesDetail && allergiesDetail.length ? allergiesDetail : (patient?.allergies || []).map(a => ({ name: a, severity: 'Moderate', reaction: 'Reported allergy' }));
 
-  if (!allergies.length) {
-    allergiesContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No known drug/food allergies reported</div></div>';
-  } else {
-    const sevColors = { Mild: 'var(--status-normal)', Moderate: 'var(--status-risk)', Severe: '#ff4d4d', Critical: '#ff0055' };
-    allergiesContainer.innerHTML = allergies.map(a => `
-      <div style="background:rgba(255,77,77,0.08); border:1px solid rgba(255,77,77,0.2); border-radius:var(--radius-md); padding:12px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-size:14px; font-weight:700; color:#ff6b6b">⚠️ ${a.name}</div>
-          <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Reaction: ${a.reaction || 'Hypersensitivity reaction'}</div>
+    if (!allergies.length) {
+      allergiesContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No known drug/food allergies reported</div></div>';
+    } else {
+      const sevColors = { Mild: 'var(--status-normal)', Moderate: 'var(--status-risk)', Severe: '#ff4d4d', Critical: '#ff0055' };
+      allergiesContainer.innerHTML = allergies.map(a => `
+        <div style="background:rgba(255,77,77,0.08); border:1px solid rgba(255,77,77,0.2); border-radius:var(--radius-md); padding:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:14px; font-weight:700; color:#ff6b6b">⚠️ ${a.name}</div>
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Reaction: ${a.reaction || 'Hypersensitivity reaction'}</div>
+          </div>
+          <span class="badge" style="background:${sevColors[a.severity] || '#ff4d4d'}; color:#fff; font-weight:700;">${a.severity}</span>
         </div>
-        <span class="badge" style="background:${sevColors[a.severity] || '#ff4d4d'}; color:#fff; font-weight:700;">${a.severity}</span>
-      </div>
-    `).join('');
+      `).join('');
+    }
   }
 
   // 3. Render Medical Conditions
   const conditionsContainer = document.getElementById('conditionsListContainer');
-  const conditions = medicalConditionsDetail && medicalConditionsDetail.length ? medicalConditionsDetail : (patient?.medicalHistory || []).map(c => ({ condition: c, status: 'Active', diagnosedYear: '—' }));
+  if (conditionsContainer) {
+    const conditions = medicalConditionsDetail && medicalConditionsDetail.length ? medicalConditionsDetail : (patient?.medicalHistory || []).map(c => ({ condition: c, status: 'Active', diagnosedYear: '—' }));
 
-  if (!conditions.length) {
-    conditionsContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-text">No pre-existing conditions recorded</div></div>';
-  } else {
-    conditionsContainer.innerHTML = conditions.map(c => `
-      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-size:14px; font-weight:700; color:var(--text-primary);">🩺 ${c.condition}</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Diagnosed Year: ${c.diagnosedYear || '—'}</div>
+    if (!conditions.length) {
+      conditionsContainer.innerHTML = '<div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-text">No pre-existing conditions recorded</div></div>';
+    } else {
+      conditionsContainer.innerHTML = conditions.map(c => `
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:14px; font-weight:700; color:var(--text-primary);">🩺 ${c.condition}</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Diagnosed Year: ${c.diagnosedYear || '—'}</div>
+          </div>
+          <span class="badge ${c.status === 'Active' ? 'badge-critical' : c.status === 'Managed' ? 'badge-normal' : 'badge-risk'}">${c.status}</span>
         </div>
-        <span class="badge ${c.status === 'Active' ? 'badge-critical' : c.status === 'Managed' ? 'badge-normal' : 'badge-risk'}">${c.status}</span>
-      </div>
-    `).join('');
+      `).join('');
+    }
   }
 }
 
@@ -1350,4 +1576,120 @@ async function submitCondition(e) {
   } else {
     showToast('Failed to save condition', 'error');
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// LIFETIME TIMELINE CATEGORY FILTERING (IMAGE 5)
+// ══════════════════════════════════════════════════════════
+function filterHistoryCategory(cat) {
+  // Update active state in wizard-nav-tabs
+  document.querySelectorAll('#section-history .wizard-tab').forEach(tab => {
+    tab.classList.remove('active');
+    const text = tab.textContent.toLowerCase();
+    if (
+      (cat === 'all' && text.includes('all')) ||
+      (cat === 'visits' && text.includes('visit')) ||
+      (cat === 'labs' && text.includes('lab')) ||
+      (cat === 'meds' && text.includes('medication')) ||
+      (cat === 'allergies' && text.includes('allerg')) ||
+      (cat === 'conditions' && text.includes('condition'))
+    ) {
+      tab.classList.add('active');
+    }
+  });
+
+  // Filter timeline cards
+  const entries = document.querySelectorAll('.history-timeline-entry');
+  entries.forEach(entry => {
+    const entryCat = entry.getAttribute('data-category');
+    if (cat === 'all' || entryCat === cat) {
+      entry.style.display = 'flex';
+    } else {
+      entry.style.display = 'none';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// CARELINK AI ASSISTANT CHATBOT DRAWER (IMAGE 2)
+// ══════════════════════════════════════════════════════════
+function sendAIChatPrompt(promptText) {
+  const input = document.getElementById('aiChatInput');
+  if (input) input.value = promptText;
+  sendAIChatMessage();
+}
+
+function sendAIChatMessage() {
+  const input = document.getElementById('aiChatInput');
+  const msgContainer = document.getElementById('aiChatMessages');
+  if (!input || !msgContainer) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  const nowTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  // Append user bubble
+  const userBubble = document.createElement('div');
+  userBubble.className = 'ai-bubble-user';
+  userBubble.innerHTML = `
+    ${escapeHtml(text)}
+    <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:4px;text-align:right;">${nowTime}</div>
+  `;
+  msgContainer.appendChild(userBubble);
+  input.value = '';
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+
+  // Bot response simulation
+  setTimeout(() => {
+    const botBubble = document.createElement('div');
+    botBubble.className = 'ai-bubble-bot';
+
+    const lower = text.toLowerCase();
+    let reply = '';
+
+    if (lower.includes('next appt') || lower.includes('next appointment')) {
+      reply = `Your next appointment is with <strong>Dr. Priya Sharma</strong> on <strong>October 1, 2026 at 10:00 AM</strong> for a General Checkup at CEG Medical Center.`;
+    } else if (lower.includes('reschedule')) {
+      reply = `I can help you reschedule! Available slots for Dr. Priya Sharma this week:<br>• <strong>Friday, Oct 2 at 11:30 AM</strong><br>• <strong>Monday, Oct 5 at 02:00 PM</strong><br>Reply with your preferred slot.`;
+    } else if (lower.includes('cancel')) {
+      reply = `To cancel an appointment, please confirm which booking you wish to cancel or call the Apollo Helpdesk at <strong>(044) 2829 0200</strong>.`;
+    } else if (lower.includes('reminder') || lower.includes('blood test')) {
+      reply = `✅ <strong>Reminder set!</strong><br>I will send you an alert on <strong>Oct 1, 2026 at 10:30 AM</strong> before your Blood Test at Apollo Diagnostics.`;
+    } else if (lower.includes('doctor') || lower.includes('priya')) {
+      reply = `Dr. Priya Sharma is a Senior Consultant Cardiologist at Apollo Hospitals. Her clinic hours are Mon–Sat, 09:00 AM – 01:00 PM.`;
+    } else {
+      reply = `I have received your request regarding: "${escapeHtml(text)}". I am synchronizing with your clinical calendar and care team now. Is there anything else I can assist you with?`;
+    }
+
+    botBubble.innerHTML = `
+      ${reply}
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${nowTime}</div>
+    `;
+    msgContainer.appendChild(botBubble);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  }, 400);
+}
+
+function resetAIChat() {
+  const msgContainer = document.getElementById('aiChatMessages');
+  if (!msgContainer) return;
+  msgContainer.innerHTML = `
+    <div class="ai-bubble-bot">
+      Hi Ravi! 👋 I can help you with your appointments, reminders, and scheduling. How can I assist you today?
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">01:18 PM</div>
+    </div>
+  `;
+  showToast('Chat history cleared', 'info');
+}
+
+// ══════════════════════════════════════════════════════════
+// LAB REPORT DROPZONE SIMULATION (IMAGE 1)
+// ══════════════════════════════════════════════════════════
+function handleReportDropUpload(files) {
+  if (!files || !files.length) return;
+  const file = files[0];
+  showToast(`Uploading ${file.name}...`, 'info');
+  setTimeout(() => {
+    showToast(`✅ "${file.name}" uploaded! OCR extracted Haematology CBC data.`, 'success');
+  }, 900);
 }

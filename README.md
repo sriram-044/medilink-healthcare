@@ -249,7 +249,8 @@ docker compose -f docker-compose.dev.yml up --build
 
 ### Installation & Startup
 ```bash
-# 1. Install dependencies
+# 1. Navigate to backend directory and install dependencies
+cd backend
 npm install
 
 # 2. Start CareLink Server (runs on Port 5000)
@@ -258,14 +259,20 @@ npm start
 
 ### Run Automated Test Suites
 ```bash
-# SOS System Integration Tests (8 tests)
+# Inside the backend/ directory:
+
+# Unit, Database & Security Test Suites (self-contained, no external DB needed)
 node test_emergency_system.js
+node test_emergency_sos_architecture.js
+node test_step6_mongodb_queries.js
+node test_step7_mongodb_indexes.js
+node test_step8_pagination.js
+node test_step9_error_handling.js
+node test_step4_csp_security.js
+node test_step5_secrets_security.js
 
-# SOS Live Route API Tests (12 tests)
-node test_emergency_routes.js
-
-# Laboratory & EHR Integration Tests (9 tests)
-node test_server_routes.js
+# Full-System Master Regression Suite (with server running on http://localhost:5000)
+node run_all_tests.js
 ```
 
 ### Access Portals & Demo Accounts (Password: `demo123`)

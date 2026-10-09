@@ -322,7 +322,9 @@ async function runTests() {
 
   // ─── Test 9: Zero Inline <script> Tags in Frontend HTML ───────────────────
   await test('Test 9 — All frontend HTML files have ZERO inline <script> tags', async () => {
-    const frontendDir = path.join(__dirname, 'frontend');
+    const frontendDir = fs.existsSync(path.join(__dirname, 'frontend'))
+      ? path.join(__dirname, 'frontend')
+      : path.join(__dirname, '..', 'frontend');
     const htmlFiles = fs.readdirSync(frontendDir).filter(f => f.endsWith('.html'));
 
     for (const file of htmlFiles) {

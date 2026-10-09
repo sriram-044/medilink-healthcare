@@ -16,7 +16,8 @@ const EmergencyTimelineEventSchema = new mongoose.Schema({
       'TEAM_ARRIVED',
       'UNDER_CARE',
       'CASE_RESOLVED',
-      'NOTE_ADDED'
+      'NOTE_ADDED',
+      'COMMUNICATION_DISPATCH'
     ],
     required: true
   },
@@ -72,10 +73,49 @@ const EmergencyCaseSchema = new mongoose.Schema({
       'HEALTH_WARNING',
       'POSSIBLE_HEALTH_EMERGENCY',
       'FALL_ALERT',
-      'FAMILY_ASSISTANCE_REQUEST'
+      'FAMILY_ASSISTANCE_REQUEST',
+      'CRITICAL_VITALS',
+      'AUTOMATIC_DETECTION',
+      'LAB_ANOMALY'
     ],
     default: 'MANUAL_SOS',
     required: true
+  },
+  triggerSource: {
+    type: String,
+    enum: ['MANUAL_BUTTON', 'AUTOMATIC_DETECTION'],
+    default: 'MANUAL_BUTTON'
+  },
+  patientProfile: {
+    age: { type: Number, default: null },
+    gender: { type: String, default: null },
+    bloodGroup: { type: String, default: null },
+    phone: { type: String, default: null },
+    address: { type: String, default: null },
+    caregiverPhone: { type: String, default: null }
+  },
+  medicalInfo: {
+    bloodGroup: { type: String, default: null },
+    allergies: [{ type: String }],
+    allergiesDetail: [{
+      name: { type: String },
+      severity: { type: String },
+      reaction: { type: String }
+    }],
+    medicalConditions: [{ type: String }],
+    medicalConditionsDetail: [{
+      condition: { type: String },
+      diagnosedYear: { type: String },
+      status: { type: String }
+    }],
+    medicalHistory: [{ type: String }],
+    currentMedications: [{ type: String }]
+  },
+  detectionDetails: {
+    source: { type: String, default: null },
+    reasons: [{ type: String }],
+    confidenceScore: { type: Number, default: null },
+    sensorData: { type: mongoose.Schema.Types.Mixed, default: null }
   },
   status: {
     type: String,

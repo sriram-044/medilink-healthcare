@@ -177,142 +177,563 @@
           </div>
         </section>
 
-        <!-- ASSIGN DOCTOR — AI-ASSISTED -->
+        <!-- ASSIGN DOCTOR — 6-STEP GUIDED WORKFLOW (IMAGE 3) -->
         <section id="section-assign" class="hidden">
-          <style>
-            .assign-layout { display:grid; grid-template-columns:360px 1fr; gap:20px; align-items:start; }
-            .assign-step { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
-            .assign-step-num { width:28px; height:28px; border-radius:50%; background:var(--primary); color:#000; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-            .assign-step-num.done { background:var(--secondary); }
-            .assign-step-num.inactive { background:var(--border); color:var(--text-muted); }
-            .patient-info-card { background:rgba(0,212,170,0.06); border:1px solid rgba(0,212,170,0.2); border-radius:12px; padding:16px; margin-top:16px; display:none; }
-            .patient-info-card.visible { display:block; }
-            .pi-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
-            .pi-row:last-child { border:none; }
-            .pi-label { color:var(--text-muted); }
-            .pi-val { font-weight:600; color:var(--text-primary); }
-            .ai-btn { width:100%; margin-top:16px; position:relative; overflow:hidden; }
-            .ai-btn::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); transform:translateX(-100%); transition:0.6s; }
-            .ai-btn:hover::before { transform:translateX(100%); }
-            .doctor-cards { display:flex; flex-direction:column; gap:14px; }
-            .doctor-card { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all 0.2s; position:relative; }
-            .doctor-card:hover { border-color:var(--primary); transform:translateY(-1px); box-shadow:0 4px 20px rgba(0,212,170,0.12); }
-            .doctor-card.selected { border-color:var(--primary); background:rgba(0,212,170,0.07); box-shadow:0 0 0 2px rgba(0,212,170,0.25); }
-            .doctor-card.rank-1 { border-color:rgba(0,212,170,0.4); }
-            .doctor-avatar-lg { width:50px; height:50px; border-radius:14px; background:linear-gradient(135deg,var(--secondary),#a29bfe); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; flex-shrink:0; }
-            .doctor-card-info { flex:1; min-width:0; }
-            .doctor-card-name { font-size:15px; font-weight:700; color:var(--text-primary); }
-            .doctor-card-spec { font-size:12px; color:var(--text-muted); margin-top:2px; }
-            .doctor-card-badges { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-            .badge-load { font-size:11px; padding:3px 8px; border-radius:20px; background:rgba(108,99,255,0.15); color:#a29bfe; font-weight:600; }
-            .badge-dept { font-size:11px; padding:3px 8px; border-radius:20px; background:rgba(0,212,170,0.12); color:var(--primary); font-weight:600; }
-            .match-score { display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
-            .match-pct { font-size:22px; font-weight:800; line-height:1; }
-            .match-label { font-size:10px; color:var(--text-muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.5px; }
-            .match-bar-wrap { width:100%; background:var(--border); border-radius:4px; height:4px; margin-top:6px; overflow:hidden; }
-            .match-bar-fill { height:4px; border-radius:4px; background:var(--primary); transition:width 0.8s ease; }
-            .rank-crown { position:absolute; top:-8px; left:16px; background:linear-gradient(135deg,#fdcb6e,#e17055); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:0.5px; }
-            .ai-analysis-panel { background:rgba(108,99,255,0.08); border:1px solid rgba(108,99,255,0.2); border-radius:12px; padding:16px; margin-bottom:18px; }
-            .ai-factors { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
-            .ai-factor { display:flex; align-items:center; gap:8px; font-size:12px; }
-            .ai-factor-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-            .confirm-bar { background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-top:16px; }
-            .confirm-summary { display:flex; gap:16px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
-            .confirm-tag { background:var(--bg-base); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px; }
-            .confirm-tag strong { display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px; font-weight:500; }
-            .assign-empty { text-align:center; padding:60px 20px; color:var(--text-muted); }
-            .assign-empty-icon { font-size:48px; margin-bottom:16px; }
-            @media(max-width:900px){ .assign-layout{grid-template-columns:1fr;} }
-          </style>
-
-          <!-- Top stats strip -->
-          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px">
-            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Unassigned Patients</div>
-              <div style="font-size:28px;font-weight:800;color:var(--danger)" id="statUnassigned">—</div>
+          <div class="card mb-20" style="padding:16px 20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+              <div>
+                <div style="font-size:18px;font-weight:800;color:#fff;">Assign Doctor</div>
+                <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">Connect patients with the right doctors</div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openCreateUserModal('doctor')">+ Add Doctor</button>
             </div>
-            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Total Patients</div>
-              <div style="font-size:28px;font-weight:800;color:var(--primary)" id="aiStatPatients">—</div>
-            </div>
-            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Doctors Available</div>
-              <div style="font-size:28px;font-weight:800;color:var(--secondary)" id="aiStatDoctors">—</div>
-            </div>
-            <div class="card" style="flex:1;min-width:130px;padding:14px 18px;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted)">Avg Patients/Doctor</div>
-              <div style="font-size:28px;font-weight:800;color:#fdcb6e" id="aiStatAvg">—</div>
+            <div class="wizard-nav-tabs" style="margin-top:16px;margin-bottom:0;border:none;">
+              <button class="wizard-tab active" onclick="switchAssignTab('unassigned')">Unassigned Patients (<span id="unassignedCountBadge">1</span>)</button>
+              <button class="wizard-tab" onclick="switchAssignTab('all')">All Patients</button>
+              <button class="wizard-tab" onclick="switchAssignTab('doctors')">My Doctors</button>
             </div>
           </div>
 
-          <div class="assign-layout">
-            <!-- LEFT — Patient selector & info -->
-            <div>
-              <div class="card">
-                <!-- Step 1 -->
-                <div class="assign-step">
-                  <div class="assign-step-num" id="step1Num">1</div>
-                  <div>
-                    <div style="font-size:13px;font-weight:700">Select Patient</div>
-                    <div style="font-size:11px;color:var(--text-muted)">Choose who needs a doctor</div>
-                  </div>
-                </div>
-                <select id="assignPatient" class="form-select" onchange="onPatientSelect(this.value)">
-                  <option value="">-- Select patient --</option>
-                </select>
+          <!-- Step 1: Patient Triage Table -->
+          <div class="card">
+            <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;">
+              <input type="text" class="form-input" id="assignSearchInput" placeholder="🔍 Search patient by name, age, or ID..." style="max-width:340px;" oninput="filterAssignTable(this.value)" />
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:30px;"><input type="checkbox" id="selectAllPatients" /></th>
+                    <th>Patient</th>
+                    <th>Age / Gender</th>
+                    <th>Condition</th>
+                    <th>Last Vitals</th>
+                    <th>Status</th>
+                    <th style="text-align:right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="assignPatientsTableBody">
+                  <!-- Patient 1: Meena Pillai -->
+                  <tr>
+                    <td><input type="checkbox" /></td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">M</div>
+                        <div>
+                          <div style="font-weight:700;font-size:14px;color:#fff;">Meena Pillai</div>
+                          <div style="font-size:11px;color:var(--text-muted);">P-001</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>38 / Female</td>
+                    <td><span style="color:var(--text-secondary);">Diabetes, Hypertension</span></td>
+                    <td><span style="font-weight:600;">BP 140/90</span><br><span style="font-size:11px;color:var(--text-muted);">HR 78</span></td>
+                    <td><span class="badge badge-warning" style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);">Needs Doctor</span></td>
+                    <td style="text-align:right;">
+                      <button class="btn btn-primary btn-sm" onclick="startAssignWizard('meena')">🔗 Assign</button>
+                    </td>
+                  </tr>
 
-                <!-- Patient info card -->
-                <div class="patient-info-card" id="patientInfoCard">
-                  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-                    <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px" id="piAvatar">?</div>
-                    <div>
-                      <div style="font-weight:700;font-size:15px" id="piName">—</div>
-                      <div style="font-size:11px;color:var(--text-muted)" id="piEmail">—</div>
-                    </div>
-                  </div>
-                  <div class="pi-row"><span class="pi-label">Age / Gender</span><span class="pi-val" id="piAge">—</span></div>
-                  <div class="pi-row"><span class="pi-label">Blood Group</span><span class="pi-val" id="piBlood">—</span></div>
-                  <div class="pi-row"><span class="pi-label">Phone</span><span class="pi-val" id="piPhone">—</span></div>
-                  <div class="pi-row"><span class="pi-label">Current Doctor</span><span class="pi-val" id="piDoctor">—</span></div>
-                  <div class="pi-row"><span class="pi-label">AI Risk Status</span><span class="pi-val" id="piRisk">—</span></div>
-                </div>
+                  <!-- Patient 2: Mr. Ravi (Critical) -->
+                  <tr style="background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;">
+                    <td><input type="checkbox" checked /></td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#ef4444,#f87171);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">M</div>
+                        <div>
+                          <div style="font-weight:700;font-size:14px;color:#fff;">Mr. Ravi</div>
+                          <div style="font-size:11px;color:var(--text-muted);">P-002</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>68 / Male</td>
+                    <td><span style="color:#ef4444;font-weight:600;">Cardiac Risk</span></td>
+                    <td><span style="color:#ef4444;font-weight:700;">BP 165/105</span><br><span style="font-size:11px;color:#ef4444;">HR 145</span></td>
+                    <td><span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-weight:700;">Critical</span></td>
+                    <td style="text-align:right;">
+                      <button class="btn btn-primary btn-sm" style="box-shadow:0 0 10px rgba(0,212,170,0.4);" onclick="startAssignWizard('ravi')">🔗 Assign</button>
+                    </td>
+                  </tr>
 
-                <!-- Step 2 -->
-                <div class="assign-step" style="margin-top:24px">
-                  <div class="assign-step-num inactive" id="step2Num">2</div>
-                  <div>
-                    <div style="font-size:13px;font-weight:700">AI Analysis</div>
-                    <div style="font-size:11px;color:var(--text-muted)">Scores doctors by fit</div>
-                  </div>
-                </div>
-                <button class="btn btn-primary ai-btn" id="analyzeBtn" onclick="runAiAnalysis()" disabled>
-                  🤖 Analyse & Recommend Doctors
-                </button>
+                  <!-- Patient 3: Rajan Kumar -->
+                  <tr>
+                    <td><input type="checkbox" /></td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">R</div>
+                        <div>
+                          <div style="font-weight:700;font-size:14px;color:#fff;">Rajan Kumar</div>
+                          <div style="font-size:11px;color:var(--text-muted);">P-003</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>45 / Male</td>
+                    <td><span style="color:var(--text-secondary);">Fever, Respiratory</span></td>
+                    <td><span style="font-weight:600;">Temp 101°F</span><br><span style="font-size:11px;color:var(--text-muted);">SpO2 96%</span></td>
+                    <td><span class="badge badge-warning" style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);">Needs Doctor</span></td>
+                    <td style="text-align:right;">
+                      <button class="btn btn-primary btn-sm" onclick="startAssignWizard('rajan')">🔗 Assign</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
-                <!-- Step 3 -->
-                <div class="assign-step" style="margin-top:24px">
-                  <div class="assign-step-num inactive" id="step3Num">3</div>
-                  <div>
-                    <div style="font-size:13px;font-weight:700">Review & Confirm</div>
-                    <div style="font-size:11px;color:var(--text-muted)">Human approval required</div>
-                  </div>
+        <!-- DOCTOR DETAILS VIEW (IMAGE 1) -->
+        <section id="section-doctor-details" class="hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-muted);">
+              <span style="cursor:pointer;" onclick="showSection('doctors')">Doctors</span> &gt;
+              <span style="color:#fff;font-weight:700;">Dr. Priya Sharma</span>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-ghost btn-sm" onclick="showSection('doctors')">← Back to Doctors</button>
+              <button class="btn btn-primary btn-sm" onclick="showToast('Edit Doctor modal opened', 'info')">✏️ Edit Doctor</button>
+              <button class="btn btn-danger btn-sm" onclick="showToast('Doctor status updated', 'warning')">⏻ Deactivate</button>
+            </div>
+          </div>
+
+          <!-- Doctor Profile Hero Card -->
+          <div class="profile-hero-card">
+            <div class="profile-hero-left">
+              <div class="profile-avatar-wrapper">
+                <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=160&auto=format&fit=crop&q=80" class="profile-avatar-img" alt="Dr. Priya Sharma" />
+                <div class="profile-status-dot"></div>
+              </div>
+              <div>
+                <div class="profile-title-row">
+                  <span class="profile-name">Dr. Priya Sharma</span>
+                  <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;border:1px solid rgba(16,185,129,0.4);">Active</span>
                 </div>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;padding:10px;background:rgba(108,99,255,0.06);border-radius:8px">
-                  🛡️ AI recommends · You approve · Assignment logged
+                <div class="profile-subtitle">Cardiologist | 5+ years experience</div>
+                <div class="profile-pill-row">
+                  <span class="profile-pill">🎓 MD - Cardiology</span>
+                  <span class="profile-pill">🏥 Apollo Hospitals</span>
+                  <span class="profile-pill">🛡️ Reg. No: 123456</span>
+                </div>
+              </div>
+            </div>
+            <div class="profile-hero-actions">
+              <button class="btn-action-icon" onclick="showToast('Calling Dr. Priya Sharma...', 'info')">📞 Call</button>
+              <button class="btn-action-icon" onclick="showToast('Opening message thread...', 'info')">💬 Message</button>
+              <button class="btn-action-icon" onclick="showToast('Composing email to doctor...', 'info')">✉️ Email</button>
+            </div>
+          </div>
+
+          <!-- Doctor Info Grid -->
+          <div class="grid-2" style="gap:20px;">
+            <!-- Personal Info -->
+            <div class="detail-grid-card">
+              <div class="detail-card-header">
+                <div class="detail-card-title">👤 Personal Information</div>
+                <button class="btn btn-ghost btn-xs" onclick="showToast('Edit mode enabled', 'info')">✏️ Edit</button>
+              </div>
+              <div class="detail-meta-list">
+                <div class="detail-meta-item"><span class="detail-meta-label">Full Name</span><span class="detail-meta-val">Dr. Priya Sharma</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Specialization</span><span class="detail-meta-val">Cardiologist</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Date of Birth</span><span class="detail-meta-val">14 Mar 1985</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Department</span><span class="detail-meta-val">Cardiology</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Age</span><span class="detail-meta-val">41 years</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Qualification</span><span class="detail-meta-val">MD - Cardiology</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Gender</span><span class="detail-meta-val">Female</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Experience</span><span class="detail-meta-val">5+ years</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Phone Number</span><span class="detail-meta-val">+91 98765 11111</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Registration No.</span><span class="detail-meta-val">123456 (TNMC)</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Email</span><span class="detail-meta-val">doctor@demo.com</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Consultation Fee</span><span class="detail-meta-val">₹600 (OP)</span></div>
+              </div>
+            </div>
+
+            <!-- Work Info -->
+            <div class="detail-grid-card">
+              <div class="detail-card-header">
+                <div class="detail-card-title">💼 Work Information</div>
+                <button class="btn btn-ghost btn-xs" onclick="showToast('Edit mode enabled', 'info')">✏️ Edit</button>
+              </div>
+              <div class="detail-meta-list">
+                <div class="detail-meta-item"><span class="detail-meta-label">Hospital / Clinic</span><span class="detail-meta-val">Apollo Hospitals, Chennai</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Department</span><span class="detail-meta-val">Cardiology</span></div>
+                <div class="detail-meta-item" style="grid-column:1/-1;"><span class="detail-meta-label">Work Shift</span><span class="detail-meta-val">Mon - Sat (9:00 AM – 5:00 PM)</span></div>
+                <div class="detail-meta-item" style="grid-column:1/-1;"><span class="detail-meta-label">Location</span><span class="detail-meta-val">Mount Road, Chennai, Tamil Nadu</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Room / Cabin No.</span><span class="detail-meta-val">OPD - 203</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">Emergency Availability</span><span class="detail-meta-val"><span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;">Yes</span></span></div>
+              </div>
+            </div>
+
+            <!-- Home & Contact Details with Map -->
+            <div class="detail-grid-card">
+              <div class="detail-card-header">
+                <div class="detail-card-title">🏠 Home &amp; Contact Details</div>
+                <button class="btn btn-ghost btn-xs">✏️ Edit</button>
+              </div>
+              <div class="detail-meta-list" style="margin-bottom:12px;">
+                <div class="detail-meta-item" style="grid-column:1/-1;"><span class="detail-meta-label">Address</span><span class="detail-meta-val">12, Gandhi Street, T. Nagar, Chennai - 600017</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">City</span><span class="detail-meta-val">Chennai</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">District</span><span class="detail-meta-val">Chennai</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">State</span><span class="detail-meta-val">Tamil Nadu</span></div>
+                <div class="detail-meta-item"><span class="detail-meta-label">PIN Code</span><span class="detail-meta-val">600017</span></div>
+              </div>
+              <div class="map-embed-box">
+                <div class="map-pin-pulse"></div>
+                <div style="font-size:12px;color:rgba(255,255,255,0.7);font-weight:600;margin-top:28px;">📍 T. Nagar, Chennai</div>
+                <button class="btn-view-map" onclick="showToast('Opening high-res GPS view...', 'info')">🗺️ View on Map</button>
+              </div>
+            </div>
+
+            <!-- Patients Assigned -->
+            <div class="detail-grid-card">
+              <div class="detail-card-header">
+                <div class="detail-card-title">👥 Patients Assigned</div>
+                <button class="btn btn-ghost btn-xs" onclick="showSection('patients')">View All</button>
+              </div>
+              <!-- Stats 3-strip -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center;">
+                  <div style="font-size:20px;font-weight:800;color:#fff;">3</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Total Patients</div>
+                </div>
+                <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:10px;text-align:center;">
+                  <div style="font-size:20px;font-weight:800;color:#10b981;">2</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Active Patients</div>
+                </div>
+                <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:10px;text-align:center;">
+                  <div style="font-size:20px;font-weight:800;color:#ef4444;">1</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Critical Patients</div>
+                </div>
+              </div>
+              <!-- Patient list -->
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,0.02);border-radius:8px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:28px;height:28px;border-radius:50%;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">M</div>
+                    <div><div style="font-size:13px;font-weight:600;color:#fff;">Meena Pillai</div><div style="font-size:11px;color:var(--text-muted);">Hypertension</div></div>
+                  </div>
+                  <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;">Active</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;cursor:pointer;" onclick="viewPatientDetails('ravi')">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:28px;height:28px;border-radius:50%;background:#ef4444;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">M</div>
+                    <div><div style="font-size:13px;font-weight:600;color:#fff;">Mr. Ravi</div><div style="font-size:11px;color:#ef4444;">Cardiac Risk</div></div>
+                  </div>
+                  <span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;">Critical</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,0.02);border-radius:8px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:28px;height:28px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">R</div>
+                    <div><div style="font-size:13px;font-weight:600;color:#fff;">Rajan Kumar</div><div style="font-size:11px;color:var(--text-muted);">Fever</div></div>
+                  </div>
+                  <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;">Active</span>
                 </div>
               </div>
             </div>
 
-            <!-- RIGHT — AI results -->
-            <div id="aiResultsPanel">
-              <div class="assign-empty">
-                <div class="assign-empty-icon">🤖</div>
-                <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px">AI Analysis Ready</div>
-                <div>Select a patient on the left, then click<br/><strong>Analyse & Recommend Doctors</strong></div>
+            <!-- Recent Activity Timeline -->
+            <div class="detail-grid-card">
+              <div class="detail-card-header">
+                <div class="detail-card-title">🕒 Recent Activity</div>
+                <button class="btn btn-ghost btn-xs">View All</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#10b981;flex-shrink:0;"></div>
+                  <div style="color:var(--text-muted);font-size:12px;min-width:130px;">02 Oct 2026, 10:30 AM</div>
+                  <div style="color:#fff;">Consultation completed for Meena Pillai</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0;"></div>
+                  <div style="color:var(--text-muted);font-size:12px;min-width:130px;">01 Oct 2026, 04:20 PM</div>
+                  <div style="color:#fff;">Assigned to Mr. Ravi</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;flex-shrink:0;"></div>
+                  <div style="color:var(--text-muted);font-size:12px;min-width:130px;">30 Sep 2026, 11:15 AM</div>
+                  <div style="color:#fff;">Lab report reviewed</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:#06b6d4;flex-shrink:0;"></div>
+                  <div style="color:var(--text-muted);font-size:12px;min-width:130px;">28 Sep 2026, 09:00 AM</div>
+                  <div style="color:#fff;">New patient assigned</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Today's Schedule -->
+            <div class="detail-grid-card">
+              <div class="detail-card-header">
+                <div class="detail-card-title">📅 Today's Schedule</div>
+                <button class="btn btn-ghost btn-xs">View All</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:8px;">
+                  <div style="display:flex;gap:14px;align-items:center;">
+                    <span style="font-weight:700;color:var(--primary);font-size:13px;">09:00 AM</span>
+                    <span style="font-weight:600;color:#fff;font-size:13px;">Meena Pillai</span>
+                    <span style="color:var(--text-muted);font-size:12px;">Follow-up</span>
+                  </div>
+                  <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;">Completed</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;">
+                  <div style="display:flex;gap:14px;align-items:center;">
+                    <span style="font-weight:700;color:#ef4444;font-size:13px;">10:00 AM</span>
+                    <span style="font-weight:600;color:#fff;font-size:13px;">Mr. Ravi</span>
+                    <span style="color:var(--text-muted);font-size:12px;">Consultation</span>
+                  </div>
+                  <span class="badge badge-normal" style="background:rgba(6,182,212,0.2);color:#06b6d4;">Upcoming</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:8px;">
+                  <div style="display:flex;gap:14px;align-items:center;">
+                    <span style="font-weight:700;color:var(--primary);font-size:13px;">11:30 AM</span>
+                    <span style="font-weight:600;color:#fff;font-size:13px;">New Patient</span>
+                    <span style="color:var(--text-muted);font-size:12px;">First Visit</span>
+                  </div>
+                  <span class="badge badge-normal" style="background:rgba(6,182,212,0.2);color:#06b6d4;">Upcoming</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:8px;">
+                  <div style="display:flex;gap:14px;align-items:center;">
+                    <span style="font-weight:700;color:var(--primary);font-size:13px;">02:00 PM</span>
+                    <span style="font-weight:600;color:#fff;font-size:13px;">Rajan Kumar</span>
+                    <span style="color:var(--text-muted);font-size:12px;">Report Review</span>
+                  </div>
+                  <span class="badge badge-normal" style="background:rgba(6,182,212,0.2);color:#06b6d4;">Upcoming</span>
+                </div>
               </div>
             </div>
           </div>
         </section>
+
+        <!-- PATIENT DETAILS VIEW (IMAGE 2) -->
+        <section id="section-patient-details" class="hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-muted);">
+              <span style="cursor:pointer;" onclick="showSection('patients')">Patients</span> &gt;
+              <span style="color:#fff;font-weight:700;">Mr. Ravi</span>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-ghost btn-sm" onclick="showSection('patients')">← Back to Patients</button>
+              <button class="btn btn-primary btn-sm" onclick="showToast('Edit Patient modal opened', 'info')">✏️ Edit</button>
+              <button class="btn btn-ghost btn-sm" onclick="showToast('Contacting patient daughter Mrs. Lakshmi...', 'info')">📞 Contact</button>
+            </div>
+          </div>
+
+          <!-- Patient Hero Card -->
+          <div class="profile-hero-card">
+            <div class="profile-hero-left">
+              <div style="width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:#fff;border:2.5px solid var(--primary);">M</div>
+              <div>
+                <div class="profile-title-row">
+                  <span class="profile-name">Mr. Ravi</span>
+                  <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;border:1px solid rgba(16,185,129,0.4);">Active Patient</span>
+                </div>
+                <div class="profile-subtitle">Patient ID: P-002 &nbsp;|&nbsp; Age: 68 &nbsp;|&nbsp; Male &nbsp;|&nbsp; Blood Group: B+</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:24px;align-items:center;">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">Joined</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;">02 Oct 2026</div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">Account Status</div>
+                <div style="font-size:14px;font-weight:700;color:#10b981;">Active</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Patient Main Grid -->
+          <div class="grid-2" style="gap:20px;">
+            <!-- Left Column: Personal, Home, Emergency -->
+            <div style="display:flex;flex-direction:column;gap:20px;">
+              <!-- Personal Info -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title">👤 Personal Information</div>
+                  <button class="btn btn-ghost btn-xs">✏️ Edit</button>
+                </div>
+                <div class="detail-meta-list">
+                  <div class="detail-meta-item"><span class="detail-meta-label">Full Name</span><span class="detail-meta-val">Mr. Ravi</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Email Address</span><span class="detail-meta-val">ravi@demo.com</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Date of Birth</span><span class="detail-meta-val">12 Apr 1958</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Emergency Contact</span><span class="detail-meta-val">Mrs. Lakshmi</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Age</span><span class="detail-meta-val">68 years</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Relationship</span><span class="detail-meta-val">Daughter</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Gender</span><span class="detail-meta-val">Male</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Emergency Phone</span><span class="detail-meta-val">+91 98765 12345</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Blood Group</span><span class="detail-meta-val">B+</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Preferred Language</span><span class="detail-meta-val">Tamil / English</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Phone Number</span><span class="detail-meta-val">+91 98765 43210</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Occupation</span><span class="detail-meta-val">Retired</span></div>
+                </div>
+              </div>
+
+              <!-- Home & Location -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title">🏠 Home &amp; Location</div>
+                  <button class="btn btn-ghost btn-xs">✏️ Edit</button>
+                </div>
+                <div class="detail-meta-list" style="margin-bottom:12px;">
+                  <div class="detail-meta-item" style="grid-column:1/-1;"><span class="detail-meta-label">Address</span><span class="detail-meta-val">12, Gandhi Street, T. Nagar</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">City</span><span class="detail-meta-val">Chennai</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">District</span><span class="detail-meta-val">Chennai</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">State</span><span class="detail-meta-val">Tamil Nadu</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">PIN Code</span><span class="detail-meta-val">600017</span></div>
+                </div>
+                <div class="map-embed-box">
+                  <div class="map-pin-pulse"></div>
+                  <div style="font-size:12px;color:rgba(255,255,255,0.7);font-weight:600;margin-top:28px;">📍 T. Nagar, Chennai</div>
+                  <button class="btn-view-map" onclick="showToast('Loading GPS view...', 'info')">🗺️ View on Map</button>
+                </div>
+              </div>
+
+              <!-- Emergency Information -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title" style="color:#ef4444;">🚨 Emergency Information</div>
+                  <button class="btn btn-ghost btn-xs">✏️ Edit</button>
+                </div>
+                <div class="detail-meta-list">
+                  <div class="detail-meta-item"><span class="detail-meta-label">Emergency Contact</span><span class="detail-meta-val">Mrs. Lakshmi (+91 98765 12345)</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Insurance Provider</span><span class="detail-meta-val">Star Health Insurance</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Relationship</span><span class="detail-meta-val">Daughter</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Policy Status</span><span class="detail-meta-val"><span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;">Active</span></span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Preferred Hospital</span><span class="detail-meta-val">Apollo Hospitals, Chennai</span></div>
+                  <div class="detail-meta-item"><span class="detail-meta-label">Known Allergies</span><span class="detail-meta-val"><span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-weight:700;">⚠️ Penicillin (Severe)</span></span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Health Snapshot, Doctor, Recent Activity, Quick Actions -->
+            <div style="display:flex;flex-direction:column;gap:20px;">
+              <!-- Health Snapshot -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title">🩺 Health Snapshot</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Last updated: 02 Oct 2026, 10:30 AM</div>
+                </div>
+                <div class="health-snapshot-grid">
+                  <div class="snapshot-card danger">
+                    <div class="snapshot-header"><span>💓</span> Heart Rate</div>
+                    <div class="snapshot-val" style="color:#ef4444;">145 bpm</div>
+                    <svg class="snapshot-sparkline" viewBox="0 0 100 30"><path d="M0,15 Q25,2 50,15 T100,8" fill="none" stroke="#ef4444" stroke-width="2.5"/></svg>
+                  </div>
+                  <div class="snapshot-card info">
+                    <div class="snapshot-header"><span>🫁</span> SpO2</div>
+                    <div class="snapshot-val" style="color:#38bdf8;">88%</div>
+                    <svg class="snapshot-sparkline" viewBox="0 0 100 30"><path d="M0,20 Q30,28 60,18 T100,24" fill="none" stroke="#38bdf8" stroke-width="2.5"/></svg>
+                  </div>
+                  <div class="snapshot-card purple">
+                    <div class="snapshot-header"><span>🩺</span> Blood Pressure</div>
+                    <div class="snapshot-val" style="color:#c084fc;">165/105</div>
+                    <svg class="snapshot-sparkline" viewBox="0 0 100 30"><path d="M0,18 Q35,8 65,22 T100,12" fill="none" stroke="#c084fc" stroke-width="2.5"/></svg>
+                  </div>
+                  <div class="snapshot-card warning">
+                    <div class="snapshot-header"><span>🌡️</span> Temperature</div>
+                    <div class="snapshot-val" style="color:#fbbf24;">101.2°F</div>
+                    <svg class="snapshot-sparkline" viewBox="0 0 100 30"><path d="M0,22 Q40,12 70,25 T100,10" fill="none" stroke="#fbbf24" stroke-width="2.5"/></svg>
+                  </div>
+                </div>
+                <!-- Critical Alert Banner -->
+                <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;">
+                  <span style="font-size:22px;">🚨</span>
+                  <div>
+                    <div style="color:#ef4444;font-weight:700;font-size:13px;">Current Status: Critical</div>
+                    <div style="color:var(--text-secondary);font-size:12px;margin-top:2px;">High blood pressure and elevated temperature</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Assigned Doctor -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title">👨‍⚕️ Assigned Doctor</div>
+                  <button class="btn btn-ghost btn-xs" onclick="showSection('assign')">Change Doctor</button>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&auto=format&fit=crop&q=80" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" alt="Doctor" />
+                    <div>
+                      <div style="font-weight:700;font-size:14px;color:#fff;cursor:pointer;" onclick="showSection('doctor-details')">Dr. Priya Sharma</div>
+                      <div style="font-size:12px;color:var(--text-muted);">Cardiologist • Apollo Hospitals, Chennai</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-action-icon" style="padding:6px 12px;font-size:12px;" onclick="showToast('Calling Dr. Priya Sharma...', 'info')">📞 Contact</button>
+                </div>
+              </div>
+
+              <!-- Recent Activity -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title">🕒 Recent Activity</div>
+                  <button class="btn btn-ghost btn-xs">View All</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;font-size:12.5px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div>
+                    <div style="color:var(--text-muted);min-width:125px;">02 Oct 2026, 10:30 AM</div>
+                    <div style="color:#fff;">Emergency alert triggered (High BP)</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#38bdf8;"></div>
+                    <div style="color:var(--text-muted);min-width:125px;">01 Oct 2026, 04:20 PM</div>
+                    <div style="color:#fff;">Lab report uploaded - Blood Test</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#10b981;"></div>
+                    <div style="color:var(--text-muted);min-width:125px;">30 Sep 2026, 11:15 AM</div>
+                    <div style="color:#fff;">Vitals recorded by wearable device</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;"></div>
+                    <div style="color:var(--text-muted);min-width:125px;">28 Sep 2026, 09:00 AM</div>
+                    <div style="color:#fff;">Doctor appointment completed</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Actions -->
+              <div class="detail-grid-card">
+                <div class="detail-card-header">
+                  <div class="detail-card-title">⚡ Quick Actions</div>
+                </div>
+                <div class="quick-action-grid">
+                  <div class="quick-action-tile" style="border-color:rgba(0,212,170,0.3);" onclick="showToast('Navigating to Live Vitals...', 'info')">
+                    <span style="font-size:18px;">💗</span>
+                    <span>View Vitals</span>
+                  </div>
+                  <div class="quick-action-tile" style="border-color:rgba(59,130,246,0.3);" onclick="showToast('Opening Medical History...', 'info')">
+                    <span style="font-size:18px;">📋</span>
+                    <span>Medical History</span>
+                  </div>
+                  <div class="quick-action-tile" style="border-color:rgba(168,85,247,0.3);" onclick="showToast('Opening Lab Reports...', 'info')">
+                    <span style="font-size:18px;">🧪</span>
+                    <span>Lab Reports</span>
+                  </div>
+                  <div class="quick-action-tile" style="border-color:rgba(245,158,11,0.3);" onclick="showToast('Viewing Prescribed Medications...', 'info')">
+                    <span style="font-size:18px;">💊</span>
+                    <span>Medications</span>
+                  </div>
+                  <div class="quick-action-tile" style="border-color:rgba(244,63,94,0.3);" onclick="showToast('Checking Appointments Calendar...', 'info')">
+                    <span style="font-size:18px;">📅</span>
+                    <span>Appointments</span>
+                  </div>
+                  <div class="quick-action-tile" style="border-color:rgba(148,163,184,0.3);" onclick="showToast('Calling Patient Contact Number...', 'info')">
+                    <span style="font-size:18px;">📞</span>
+                    <span>Contact Patient</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6-STEP GUIDED WIZARD MODALS (STEPS 2, 3, 4, 5) -->
+        <div id="assignWizardModal" class="modal-overlay hidden">
+          <div class="modal" style="width:min(720px,95vw);padding:24px;" id="assignWizardModalContent">
+            <!-- Dynamically populated step contents -->
+          </div>
+        </div>
 
         <!-- REPORTS -->
         <section id="section-reports" class="hidden">

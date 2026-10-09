@@ -220,7 +220,10 @@ async function runMasterSuite() {
       !hasTokenInCallbackUrl && googleAuthSrc.includes('setAuthCookie'));
 
     // Client secrets not present in frontend files
-    const frontendJs = fs.readFileSync(path.join(__dirname, 'frontend', 'js', 'auth.js'), 'utf8');
+    const frontendDir = fs.existsSync(path.join(__dirname, 'frontend'))
+      ? path.join(__dirname, 'frontend')
+      : path.join(__dirname, '..', 'frontend');
+    const frontendJs = fs.readFileSync(path.join(frontendDir, 'js', 'auth.js'), 'utf8');
     recordResult('OAuth', 'Frontend JavaScript does not contain Google Client Secrets',
       !frontendJs.includes('client_secret') && !frontendJs.includes('GOOGLE_CLIENT_SECRET'));
 
@@ -685,8 +688,11 @@ async function runMasterSuite() {
 
   for (const portal of portals) {
     try {
-      const htmlPath = path.join(__dirname, 'frontend', portal.file);
-      const jsPath = path.join(__dirname, 'frontend', portal.js);
+      const frontendDir = fs.existsSync(path.join(__dirname, 'frontend'))
+        ? path.join(__dirname, 'frontend')
+        : path.join(__dirname, '..', 'frontend');
+      const htmlPath = path.join(frontendDir, portal.file);
+      const jsPath = path.join(frontendDir, portal.js);
 
       const htmlExists = fs.existsSync(htmlPath);
       const jsExists = fs.existsSync(jsPath);

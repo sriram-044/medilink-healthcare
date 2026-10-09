@@ -15,6 +15,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
+const fs = require('fs');
 const session = require('express-session');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -181,7 +182,13 @@ app.use(passport.session());
 app.use('/uploads', (_req, res) => {
   res.status(404).json({ message: 'Direct file access is disabled. Use authenticated API endpoints.' });
 });
-app.use(express.static(path.join(__dirname, 'frontend')));
+// Support both standalone backend (../frontend) and container/unified layouts (./frontend)
+const frontendDir = process.env.FRONTEND_DIR || (
+  fs.existsSync(path.join(__dirname, 'frontend', 'index.html'))
+    ? path.join(__dirname, 'frontend')
+    : path.join(__dirname, '..', 'frontend')
+);
+app.use(express.static(frontendDir));
 
 // ─── Scheduled Jobs ───────────────────────────────────────────────────────
 require('./utils/scheduler');
@@ -226,7 +233,7 @@ app.all('/api/*', apiNotFoundHandler);
 
 // ─── Catch-all: serve frontend SPA ────────────────────────────────────────
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+  res.sendFile(path.join(frontendDir, 'index.html'));
 });
 
 // ─── Centralized Error Handler ─────────────────────────────────────────────

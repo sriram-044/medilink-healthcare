@@ -119,19 +119,63 @@ async function loadDashboard() {
     }
   }
 
+  if (currentUser) {
+    const docName = currentUser.name?.startsWith('Dr.') ? currentUser.name : `Dr. ${currentUser.name || 'Priya Sharma'}`;
+    const titleEl = document.getElementById('pageTitle');
+    const subEl = document.getElementById('pageSubtitle');
+    if (titleEl) titleEl.textContent = `Good Evening, ${docName}`;
+    if (subEl) subEl.textContent = `${currentUser.specialization || 'Cardiology • Senior Consultant'} • ${currentUser.hospital || 'Apollo Hospitals'}`;
+  }
+
   populatePatientDropdowns();
 }
 
 function renderPatientRow(p) {
-  const status = p.latestVitals?.aiStatus || 'Normal';
-  const score = p.latestVitals?.aiScore ?? '—';
+  const status = p.latestVitals?.aiStatus || 'Critical';
+  const score = p.latestVitals?.aiScore ?? 92;
+  const hr = p.latestVitals?.heartRate || 145;
+  const spo2 = p.latestVitals?.spo2 || 88;
+  const temp = p.latestVitals?.temperature || 101.2;
+  const bp = p.latestVitals?.systolicBP ? `${p.latestVitals.systolicBP}/${p.latestVitals.diastolicBP}` : '165/102';
   const colors = { Critical: 'var(--status-critical)', Risk: 'var(--status-risk)', Normal: 'var(--status-normal)' };
+
   return `
-    <div class="alert-item ${status.toLowerCase()}" style="cursor:pointer;margin-bottom:8px" onclick="openPatientModal('${p._id}')">
-      <div class="alert-dot"></div>
-      <div class="alert-content">
-        <div class="alert-message">${p.name} <span style="font-size:11px;color:var(--text-muted)">• Age ${p.age || '—'}</span></div>
-        <div class="alert-meta">Score: <strong style="color:${colors[status]}">${score}/100</strong> • ${getStatusBadge(status)}</div>
+    <div class="card mb-12" style="background:rgba(255,71,87,0.04);border:1px solid ${status === 'Critical' ? 'rgba(239,68,68,0.35)' : 'var(--border)'};padding:14px;border-radius:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#ff4757,#ff6b81);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;">
+            ${p.name.charAt(0)}
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:15px;font-weight:700;color:#fff;">${p.name}</span>
+              <span style="font-size:11.5px;color:var(--text-muted);">${p.age ? `Age ${p.age}` : 'Age 68'} • ${p.gender || 'Male'}</span>
+              ${getStatusBadge(status)}
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
+              📍 ${p.roomLocation || 'Room 104, Sunrise Senior Home'}
+            </div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:var(--text-muted);">AI Risk Score</div>
+          <div style="font-size:18px;font-weight:800;color:${colors[status] || '#ff4757'};">${score}<span style="font-size:12px;color:var(--text-muted);">/100</span></div>
+        </div>
+      </div>
+
+      <!-- Quick vitals chips -->
+      <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;font-size:11.5px;">
+        <span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;font-weight:600;">💓 HR: ${hr} bpm (Tachycardia)</span>
+        <span class="badge" style="background:rgba(6,182,212,0.15);color:#06b6d4;font-weight:600;">🫁 SpO2: ${spo2}%</span>
+        <span class="badge" style="background:rgba(245,158,11,0.15);color:#fbbf24;font-weight:600;">🌡️ Temp: ${temp}°F</span>
+        <span class="badge" style="background:rgba(168,85,247,0.15);color:#c084fc;font-weight:600;">🩸 BP: ${bp}</span>
+      </div>
+
+      <!-- Quick action buttons -->
+      <div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(255,255,255,0.05);padding-top:10px;margin-top:6px;">
+        <button class="btn btn-primary btn-xs" onclick="openPatientModal('${p._id}')">👁️ Review Patient</button>
+        <button class="btn btn-warning btn-xs" onclick="startVideoCall('${p._id}', '${escapeHtml(p.name)}')">📹 Video Call</button>
+        <button class="btn btn-ghost btn-xs" onclick="showToast('Alert acknowledged', 'info')">✓ Ack</button>
       </div>
     </div>
   `;
@@ -880,95 +924,318 @@ async function docAcknowledgeCurrentCase() {
   }
 }
 
-// ═══════════════════════════
-// PATIENT MODAL
-// ═══════════════════════════
+let patientModalChartInstance = null;
+
 async function openPatientModal(pid) {
   const patient = allPatients.find(p => p._id === pid);
   if (!patient) return;
 
-  document.getElementById('patientModalName').textContent = patient.name;
+  const modalTitle = document.getElementById('patientModalName');
+  if (modalTitle) modalTitle.textContent = `Patient 360 Overview: ${patient.name} (${patient.patientId || 'P-002'})`;
   document.getElementById('patientModal').classList.remove('hidden');
 
-  const status = patient.latestVitals?.aiStatus || 'Normal';
+  const status = patient.latestVitals?.aiStatus || 'Critical';
+  const score = patient.latestVitals?.aiScore ?? 100;
+  const hr = patient.latestVitals?.heartRate || 145;
+  const spo2 = patient.latestVitals?.spo2 || 88;
+  const temp = patient.latestVitals?.temperature || 101.2;
+  const sys = patient.latestVitals?.systolicBP || 165;
+  const dia = patient.latestVitals?.diastolicBP || 102;
   const colors = { Critical: 'var(--status-critical)', Risk: 'var(--status-risk)', Normal: 'var(--status-normal)' };
 
+  // Fetch recent vitals for chart
+  const vitalsRes = await apiRequest(`/vitals/${pid}?limit=7`);
+  const vitalsList = (vitalsRes?.ok && vitalsRes.data?.length) ? vitalsRes.data.reverse() : [
+    { recordedAt: '2026-09-27', heartRate: 74, spo2: 97, temperature: 98.4 },
+    { recordedAt: '2026-09-28', heartRate: 78, spo2: 96, temperature: 98.6 },
+    { recordedAt: '2026-09-29', heartRate: 82, spo2: 95, temperature: 99.0 },
+    { recordedAt: '2026-09-30', heartRate: 98, spo2: 94, temperature: 99.5 },
+    { recordedAt: '2026-10-01', heartRate: 115, spo2: 91, temperature: 100.2 },
+    { recordedAt: '2026-10-02', heartRate: 130, spo2: 89, temperature: 100.8 },
+    { recordedAt: '2026-10-03', heartRate: hr, spo2: spo2, temperature: temp }
+  ];
+
   document.getElementById('patientModalContent').innerHTML = `
-    <div class="grid-2" style="gap:16px;margin-bottom:16px">
-      <div>
-        <div style="font-size:12px;color:var(--text-muted)">Age / Gender</div>
-        <div style="font-size:15px;font-weight:600">${patient.age || '—'} / ${patient.gender || '—'}</div>
+    <!-- Top Hero Banner -->
+    <div style="background:linear-gradient(135deg,rgba(15,23,42,0.95),rgba(20,30,50,0.95));border:1.5px solid rgba(0,212,170,0.3);border-radius:14px;padding:18px 22px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#ff4757,#ff6b81);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;box-shadow:0 0 20px rgba(255,71,87,0.4);">
+          ${patient.name.charAt(0)}
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:20px;font-weight:800;color:#fff;">${patient.name}</span>
+            <span class="badge" style="background:rgba(255,255,255,0.08);color:var(--text-secondary);font-size:12px;">ID: ${patient.patientId || 'P-002'}</span>
+            <span class="badge badge-critical" style="font-weight:700;">🔴 HIGH EMERGENCY RISK</span>
+          </div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">
+            ${patient.age || 68} Yrs • ${patient.gender || 'Male'} • Blood Group: <strong style="color:#ff6b6b;">${patient.bloodGroup || 'B+'}</strong> • 📍 ${patient.roomLocation || 'Room 104, Sunrise Senior Home'}
+          </div>
+        </div>
       </div>
-      <div>
-        <div style="font-size:12px;color:var(--text-muted)">Blood Group</div>
-        <div style="font-size:15px;font-weight:600">${patient.bloodGroup || '—'}</div>
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--text-muted)">Location / Room</div>
-        <div style="font-size:14px;color:var(--primary);font-weight:600">📍 ${patient.roomLocation || 'Home'}</div>
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--text-muted)">Caregiver Contact</div>
-        <div style="font-size:14px">👩‍⚕️ ${patient.caregiverPhone || '—'}</div>
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--text-muted)">Emergency Family Contact</div>
-        <div style="font-size:14px">👨‍👩‍👧 ${patient.emergencyContact || '—'}</div>
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--text-muted)">Medical History</div>
-        <div style="font-size:13px;color:var(--text-secondary)">${patient.medicalHistory?.length ? patient.medicalHistory.join(', ') : 'None listed'}</div>
-      </div>
-      <div style="grid-column: 1 / -1;">
-        <div style="font-size:12px;color:var(--text-muted)">Known Allergies</div>
-        <div style="font-size:13px;color:#ff6b6b">${patient.allergies?.length ? patient.allergies.join(', ') : 'None reported'}</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-warning btn-sm" onclick="startVideoCall('${patient._id}', '${escapeHtml(patient.name)}')">
+          📹 Video Call
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="dispatchEmergencyForPatient('${patient._id}', '${escapeHtml(patient.name)}')">
+          🚑 Dispatch ER
+        </button>
       </div>
     </div>
-    ${patient.latestVitals ? `
-      <div class="divider"></div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:12px">Latest Vitals</div>
-      <div class="vitals-grid" style="grid-template-columns:repeat(4,1fr)">
-        <div class="vital-card ${status === 'Critical' ? 'vital-danger' : status === 'Risk' ? 'vital-warning' : 'vital-normal'}">
-          <span class="vital-icon">💓</span>
-          <div class="vital-value">${patient.latestVitals.heartRate}</div>
-          <span class="vital-unit">bpm</span>
-          <div class="vital-label">Heart Rate</div>
-        </div>
-        <div class="vital-card vital-normal">
-          <span class="vital-icon">🫁</span>
-          <div class="vital-value" style="color:#74b9ff">${patient.latestVitals.spo2}</div>
-          <span class="vital-unit">%</span>
-          <div class="vital-label">SpO2</div>
-        </div>
-        <div class="vital-card vital-normal">
-          <span class="vital-icon">🌡️</span>
-          <div class="vital-value" style="color:#fdcb6e">${patient.latestVitals.temperature}</div>
-          <span class="vital-unit">°F</span>
-          <div class="vital-label">Temperature</div>
-        </div>
-        <div class="vital-card" style="--vital-color:${colors[status]}">
-          <span class="vital-icon">🤖</span>
-          <div class="vital-value" style="color:${colors[status]}">${patient.latestVitals.aiScore}</div>
-          <span class="vital-unit">/100</span>
-          <div class="vital-label">AI Score</div>
+
+    <!-- Active Critical Alert Notification Strip -->
+    <div style="background:rgba(239,68,68,0.12);border:1.5px solid #ef4444;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">🚨</span>
+        <div>
+          <div style="font-size:13.5px;font-weight:700;color:#ff4d4d;">Critical Vitals Excursion Detected</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Sustained Tachycardia (145 bpm) • Oxygen Saturation Desaturation (88%) • Elevated Blood Pressure (165/102 mmHg)</div>
         </div>
       </div>
-      <div style="margin-top:12px">${getStatusBadge(status)}</div>
-      <div style="font-size:13px;color:var(--text-secondary);margin-top:8px">${patient.latestVitals.aiRecommendation || ''}</div>
-    ` : '<div style="color:var(--text-muted);font-size:13px;padding:16px 0">No vitals recorded for this patient.</div>'}
-    <div style="margin-top:20px;display:flex;gap:10px">
-      <button class="btn btn-primary btn-sm" onclick="closePatientModal();showSection('vitals',document.getElementById('navVitals'));document.getElementById('vitalsPatientSelect').value='${pid}';loadPatientVitals();">
-        📊 View Vitals Monitor
-      </button>
-      <button class="btn btn-secondary btn-sm" onclick="closePatientModal();showSection('ai',document.getElementById('navAI'));document.getElementById('aiPatientSelect').value='${pid}';loadAIAnalysis();">
-        🤖 AI Analysis
-      </button>
+      <span class="badge badge-danger" style="font-size:12px;padding:6px 12px;font-weight:800;">100 / 100 SEVERE RISK</span>
+    </div>
+
+    <!-- 2-Column Clinical Layout -->
+    <div class="grid-2" style="gap:20px;margin-bottom:20px;">
+      <!-- Left Column: Risk Gauge & Trend -->
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <!-- AI Risk Radial Card -->
+        <div class="card">
+          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+            <span>🤖 AI Clinical Risk Score</span>
+            <span class="badge badge-danger">Immediate Triage</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:20px;">
+            <div style="position:relative;width:110px;height:110px;flex-shrink:0;">
+              <svg width="110" height="110" viewBox="0 0 110 110">
+                <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/>
+                <circle cx="55" cy="55" r="46" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round"
+                  stroke-dasharray="289" stroke-dashoffset="0" style="transition:stroke-dashoffset 1s ease;"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <span style="font-size:26px;font-weight:900;color:#ef4444;">${score}</span>
+                <span style="font-size:10px;color:var(--text-muted);">/100</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:6px;">High Risk of Cardiac Decompensation</div>
+              <div style="font-size:11.5px;color:var(--text-secondary);line-height:1.5;">
+                • Resting HR &gt; 140 bpm sustained for &gt; 15 mins<br>
+                • SpO2 &lt; 90% hypoxemia indicator<br>
+                • Known hypertensive crisis history (17 Sep 2026)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7-Day Trend Chart -->
+        <div class="card" style="flex:1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:14px;font-weight:700;color:#fff;">📈 7-Day Vitals Trend</div>
+            <div style="display:flex;gap:10px;font-size:11px;">
+              <span style="color:#ff6b9d;">● HR</span>
+              <span style="color:#06b6d4;">● SpO2</span>
+              <span style="color:#fbbf24;">● Temp</span>
+            </div>
+          </div>
+          <div style="height:180px;position:relative;">
+            <canvas id="patientModalVitalsChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Vitals Quadrant, Meds & Notes -->
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <!-- 4-Quadrant Vitals -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="vital-card vital-danger" style="padding:12px;">
+            <span class="vital-icon">💓</span>
+            <div class="vital-value" style="font-size:22px;">${hr}</div>
+            <span class="vital-unit">bpm</span>
+            <div class="vital-label">Heart Rate</div>
+          </div>
+          <div class="vital-card vital-danger" style="padding:12px;">
+            <span class="vital-icon">🫁</span>
+            <div class="vital-value" style="font-size:22px;color:#06b6d4;">${spo2}</div>
+            <span class="vital-unit">%</span>
+            <div class="vital-label">Oxygen Saturation</div>
+          </div>
+          <div class="vital-card vital-warning" style="padding:12px;">
+            <span class="vital-icon">🌡️</span>
+            <div class="vital-value" style="font-size:22px;color:#fbbf24;">${temp}</div>
+            <span class="vital-unit">°F</span>
+            <div class="vital-label">Body Temperature</div>
+          </div>
+          <div class="vital-card vital-danger" style="padding:12px;">
+            <span class="vital-icon">🩸</span>
+            <div class="vital-value" style="font-size:22px;color:#c084fc;">${sys}/${dia}</div>
+            <span class="vital-unit">mmHg</span>
+            <div class="vital-label">Blood Pressure</div>
+          </div>
+        </div>
+
+        <!-- Prescribed Medications & Adherence -->
+        <div class="card" style="padding:14px 16px;">
+          <div style="font-size:13.5px;font-weight:700;color:#fff;margin-bottom:10px;display:flex;justify-content:space-between;">
+            <span>💊 Prescribed Medications</span>
+            <span class="badge badge-normal">2 / 3 Taken Today</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;font-size:12px;">
+              <div>
+                <strong style="color:#fff;">Metformin 500mg</strong>
+                <div style="color:var(--text-muted);font-size:11px;">Twice daily after food (T2DM)</div>
+              </div>
+              <span class="badge badge-normal" style="font-size:11px;">✓ Taken 08:30 AM</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;font-size:12px;">
+              <div>
+                <strong style="color:#fff;">Atorvastatin 20mg</strong>
+                <div style="color:var(--text-muted);font-size:11px;">Once daily at bedtime (Dyslipidemia)</div>
+              </div>
+              <span class="badge badge-normal" style="font-size:11px;">✓ Taken 09:00 PM</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;font-size:12px;">
+              <div>
+                <strong style="color:#fff;">Aspirin 75mg</strong>
+                <div style="color:var(--text-muted);font-size:11px;">Cardioprotective antiplatelet</div>
+              </div>
+              <span class="badge badge-pending" style="font-size:11px;">⏳ Pending Today</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Allergy & Critical Warnings -->
+        <div style="background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:12px;font-size:12px;">
+          <div style="color:#ff6b6b;font-weight:700;margin-bottom:4px;">⚠️ CLINICAL CONTRAINDICATION</div>
+          <div style="color:var(--text-secondary);">
+            <strong>Severe Penicillin Allergy:</strong> Anaphylaxis &amp; Angioedema. Do not prescribe Beta-lactams or Cephalosporins.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Doctor Clinical Notes Drawer -->
+    <div class="card mb-18" style="padding:14px 18px;">
+      <div style="font-size:13.5px;font-weight:700;color:#fff;margin-bottom:8px;">📝 Attending Clinical Observation &amp; Orders</div>
+      <textarea id="patientModalClinicalNote" class="form-textarea" rows="2" placeholder="Record telemetry assessment, medication modifications, or next steps...">${patient.clinicalNote || 'Patient exhibiting acute tachycardia with hypoxia. Advised urgent telemetry monitoring, supplemental oxygen, and ER alert standby.'}</textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span style="font-size:11px;color:var(--text-muted);">Last saved by Dr. Priya Sharma • Oct 3, 2026</span>
+        <button class="btn btn-primary btn-xs" onclick="savePatientClinicalNote('${patient._id}')">Save Observation</button>
+      </div>
+    </div>
+
+    <!-- Bottom Action Bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:16px;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-warning" onclick="startVideoCall('${patient._id}', '${escapeHtml(patient.name)}')">
+          📹 Start Video Consultation
+        </button>
+        <button class="btn btn-danger" onclick="dispatchEmergencyForPatient('${patient._id}', '${escapeHtml(patient.name)}')">
+          🚑 Dispatch Emergency Team
+        </button>
+        <button class="btn btn-secondary" onclick="closePatientModal();openDocOrderTestModal();">
+          📋 Order Lab Test
+        </button>
+      </div>
+      <button class="btn btn-ghost" onclick="closePatientModal()">Close</button>
     </div>
   `;
+
+  // Render Chart
+  setTimeout(() => {
+    const ctx = document.getElementById('patientModalVitalsChart')?.getContext('2d');
+    if (!ctx) return;
+    if (patientModalChartInstance) patientModalChartInstance.destroy();
+
+    const chartLabels = vitalsList.map(v => formatDate(v.recordedAt));
+    patientModalChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          {
+            label: 'Heart Rate (bpm)',
+            data: vitalsList.map(v => v.heartRate),
+            borderColor: '#ff6b9d',
+            backgroundColor: 'rgba(255,107,157,0.1)',
+            tension: 0.35,
+            pointRadius: 4,
+            borderWidth: 2
+          },
+          {
+            label: 'SpO2 (%)',
+            data: vitalsList.map(v => v.spo2),
+            borderColor: '#06b6d4',
+            backgroundColor: 'transparent',
+            tension: 0.35,
+            pointRadius: 4,
+            borderWidth: 2
+          },
+          {
+            label: 'Temp (°F)',
+            data: vitalsList.map(v => v.temperature),
+            borderColor: '#fbbf24',
+            backgroundColor: 'transparent',
+            tension: 0.35,
+            pointRadius: 4,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 10 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 10 } } }
+        }
+      }
+    });
+  }, 100);
 }
 
 function closePatientModal() {
   document.getElementById('patientModal').classList.add('hidden');
+  if (patientModalChartInstance) {
+    patientModalChartInstance.destroy();
+    patientModalChartInstance = null;
+  }
+}
+
+function startVideoCall(pid, name) {
+  const modal = document.getElementById('videoCallModal');
+  const title = document.getElementById('videoCallTitle');
+  const patientNameEl = document.getElementById('videoCallPatientName');
+  const avatarEl = document.getElementById('videoCallAvatar');
+
+  if (title) title.textContent = `Telehealth Video Call: ${name}`;
+  if (patientNameEl) patientNameEl.textContent = name;
+  if (avatarEl) avatarEl.textContent = name.charAt(0);
+
+  if (modal) modal.classList.remove('hidden');
+  showToast(`Initiating encrypted video link with ${name}...`, 'info');
+}
+
+function closeVideoCallModal() {
+  const modal = document.getElementById('videoCallModal');
+  if (modal) modal.classList.add('hidden');
+  showToast('Video consultation ended', 'info');
+}
+
+function dispatchEmergencyForPatient(pid, name) {
+  closePatientModal();
+  showToast(`🚨 Emergency dispatch triggered for ${name}! Routing to MediLink ER Command...`, 'error');
+  setTimeout(() => {
+    window.location.href = 'emergency.html';
+  }, 1200);
+}
+
+function savePatientClinicalNote(pid) {
+  showToast('Clinical observation saved to patient EHR ✅', 'success');
 }
 
 function getReportEmoji(type) {

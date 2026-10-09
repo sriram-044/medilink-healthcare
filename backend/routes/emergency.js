@@ -5,7 +5,7 @@ const Alert = require('../models/Alert');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
-const { triggerEmergencyWorkflow } = require('../utils/emergencyEngine');
+const { triggerEmergencyWorkflow, emergencySosService } = require('../utils/emergencyEngine');
 const notificationService = require('../utils/notificationService');
 const { escapeRegex, buildDateQuery, isValidObjectId } = require('../utils/queryHelper');
 const { parsePagination, formatPaginatedResponse } = require('../utils/paginationHelper');
@@ -122,6 +122,140 @@ router.post('/sos', auth, async (req, res, next) => {
 });
 
 /**
+ * POST /api/emergency/manual-sos — Explicit alias for Manual SOS Button
+ */
+router.post('/manual-sos', auth, async (req, res, next) => {
+  try {
+    const patientId = req.user._id;
+    const { location = null, reason = 'Patient pressed SOS button', recentHealthData = {} } = req.body;
+
+    const result = await emergencySosService.triggerManualSOS({
+      patientId,
+      location,
+      reason,
+      vitals: recentHealthData,
+      performedBy: patientId
+    });
+
+    const isLocationShared = Boolean(result.emergencyCase?.location?.isAvailable);
+
+    res.status(result.isDuplicate ? 200 : 201).json({
+      message: result.isDuplicate
+        ? 'You already have an active emergency case in progress.'
+        : (isLocationShared ? '🚨 Emergency SOS broadcasted successfully. Location shared.' : '🚨 Emergency alert sent. Current location is unavailable.'),
+      emergencyCase: result.emergencyCase,
+      alert: result.alert,
+      isDuplicate: result.isDuplicate || false
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/emergency/automatic-sos — Automated SOS Detection from wearables, sensors, or AI monitors
+ */
+router.post('/automatic-sos', auth, async (req, res, next) => {
+  try {
+    const targetPatientId = (req.body.patientId && ['doctor', 'admin', 'emergency'].includes(req.user.role))
+      ? req.body.patientId
+      : req.user._id;
+
+    const {
+      detectionSource = 'wearable',
+      vitals = {},
+      fallDetected = false,
+      score = 80,
+      reasons = [],
+      location = null,
+      sensorData = null
+    } = req.body;
+
+    const result = await emergencySosService.triggerAutomaticSOS({
+      patientId: targetPatientId,
+      detectionSource,
+      vitals,
+      fallDetected: Boolean(fallDetected),
+      score,
+      reasons,
+      location,
+      sensorData
+    });
+
+    res.status(result.isDuplicate ? 200 : 201).json({
+      message: result.isDuplicate
+        ? 'Active emergency case already in progress. Signal logged to timeline.'
+        : '🚨 Automatic SOS detection processed and escalated to Emergency Engine',
+      emergencyCase: result.emergencyCase,
+      alert: result.alert,
+      isDuplicate: result.isDuplicate || false
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/emergency/user-data/:patientId? — Returns User Data Module payload (Patient Profile, Medical Info, Contacts, Location)
+ */
+router.get('/user-data/:patientId?', auth, async (req, res, next) => {
+  try {
+    const targetId = req.params.patientId || req.user._id;
+
+    // Security check: Only self, assigned doctor, admin, or emergency staff can access
+    const isSelf = targetId.toString() === req.user._id.toString();
+    const isStaff = ['emergency', 'admin', 'doctor', 'hospital'].includes(req.user.role);
+    if (!isSelf && !isStaff) {
+      return res.status(403).json({ message: 'Unauthorized to view emergency user data' });
+    }
+
+    const userData = await emergencySosService.userData.aggregateUserData(targetId);
+    res.json({
+      success: true,
+      patientProfile: userData.patientProfile,
+      medicalInfo: userData.medicalInfo,
+      emergencyContacts: userData.emergencyContacts,
+      location: userData.location,
+      data: userData
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/emergency/cases/:id/incident-log — Returns complete chronological incident timeline
+ */
+router.get('/cases/:id/incident-log', auth, async (req, res, next) => {
+  try {
+    const timeline = await emergencySosService.cases.getIncidentLog(req.params.id);
+    res.json(timeline);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/emergency/cases/:id/location — Live GPS coordinate telemetry updates en route
+ */
+router.post('/cases/:id/location', auth, async (req, res, next) => {
+  try {
+    const { latitude, longitude, accuracy, address } = req.body;
+    const updatedCase = await emergencySosService.cases.updateLocation(
+      req.params.id,
+      { latitude, longitude, accuracy, address },
+      req.user
+    );
+    res.json({
+      message: 'Location updated in emergency incident log',
+      location: updatedCase.location
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/emergency/:id/cancel — Cancel SOS (if false alarm before advanced care)
  */
 router.post('/:id/cancel', auth, async (req, res, next) => {
@@ -219,6 +353,14 @@ router.get('/dashboard-stats', auth, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * GET /api/emergency/communication-status — Provider diagnostic endpoint
+ */
+router.get('/communication-status', auth, role('admin', 'emergency'), (req, res) => {
+  const emergencyCommunicationService = require('../utils/emergencyCommunicationService');
+  res.json(emergencyCommunicationService.getDiagnosticStatus());
 });
 
 /**

@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function showSection(section, navEl) {
   document.querySelectorAll('section[id^="section-"]').forEach(s => s.classList.add('hidden'));
-  document.getElementById(`section-${section}`).classList.remove('hidden');
+  const target = document.getElementById(`section-${section}`);
+  if (target) target.classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (navEl) navEl.classList.add('active');
 
@@ -29,7 +30,9 @@ function showSection(section, navEl) {
     analytics: ['Analytics', 'System statistics and charts'],
     patients: ['Patient Management', 'All registered patients'],
     doctors: ['Doctor Management', 'All registered doctors'],
-    assign: ['Assign Doctor', 'Link doctors to patients'],
+    assign: ['Assign Doctor', 'Connect patients with the right doctors'],
+    'doctor-details': ['Doctor Details', 'Doctors > Dr. Priya Sharma'],
+    'patient-details': ['Patient Details', 'Patients > Mr. Ravi'],
     reports: ['Lab Reports', 'System-wide report management'],
     alerts: ['All Alerts', 'System-wide alert feed'],
     settings: ['System Settings', 'Configure AI thresholds and hospital info']
@@ -43,6 +46,14 @@ function showSection(section, navEl) {
   if (section === 'reports') loadAdminReports();
   if (section === 'alerts') loadAdminAlerts();
   if (section === 'analytics') loadAnalytics();
+}
+
+function viewDoctorDetails(doctorId) {
+  showSection('doctor-details');
+}
+
+function viewPatientDetails(patientId) {
+  showSection('patient-details');
 }
 
 // ═══════════════════════════
@@ -163,16 +174,21 @@ async function loadPatients() {
   }
   tbody.innerHTML = res.data.map(p => `
     <tr>
-      <td><div style="display:flex;align-items:center;gap:10px">
+      <td><div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="viewPatientDetails('${p._id}')" title="Click to view 360 profile">
         <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${p.name.charAt(0)}</div>
-        ${p.name}
+        <span style="font-weight:600;color:#fff;">${p.name}</span>
       </div></td>
       <td>${p.email}</td>
       <td>${p.age || '—'}</td>
       <td>${p.bloodGroup || '—'}</td>
       <td>${p.assignedDoctor?.name || '<span style="color:var(--text-muted)">Unassigned</span>'}</td>
       <td>${formatDate(p.createdAt)}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteUser('${p._id}', loadPatients)">Delete</button></td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-xs" onclick="viewPatientDetails('${p._id}')">👁️ View 360</button>
+          <button class="btn btn-danger btn-xs" onclick="deleteUser('${p._id}', loadPatients)">Delete</button>
+        </div>
+      </td>
     </tr>
   `).join('');
 }
@@ -190,16 +206,21 @@ async function loadDoctors() {
   }
   tbody.innerHTML = res.data.map(d => `
     <tr>
-      <td><div style="display:flex;align-items:center;gap:10px">
+      <td><div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="viewDoctorDetails('${d._id}')" title="Click to view 360 profile">
         <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--secondary),#a29bfe);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${d.name.charAt(0)}</div>
-        ${d.name}
+        <span style="font-weight:600;color:#fff;">${d.name}</span>
       </div></td>
       <td>${d.email}</td>
       <td>${d.specialization || '—'}</td>
       <td>${d.department || '—'}</td>
       <td>${d.phone || '—'}</td>
       <td>${d.assignedPatients?.length || 0}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteUser('${d._id}', loadDoctors)">Delete</button></td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-xs" onclick="viewDoctorDetails('${d._id}')">👁️ View 360</button>
+          <button class="btn btn-danger btn-xs" onclick="deleteUser('${d._id}', loadDoctors)">Delete</button>
+        </div>
+      </td>
     </tr>
   `).join('');
 }
@@ -626,4 +647,393 @@ function filterTable(tableId, query) {
     const text = row.innerText.toLowerCase();
     row.style.display = text.includes(query.toLowerCase()) ? '' : 'none';
   });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 6-STEP GUIDED "ASSIGN DOCTOR" WIZARD (IMAGE 3)
+// ══════════════════════════════════════════════════════════════════════════
+let currentAssignPatient = 'ravi';
+let currentAssignDoctor = 'priya';
+
+function switchAssignTab(tab) {
+  document.querySelectorAll('.wizard-tab').forEach(t => t.classList.remove('active'));
+  if (event?.target) event.target.classList.add('active');
+  const tbody = document.getElementById('assignPatientsTableBody');
+  if (!tbody) return;
+  if (tab === 'unassigned') {
+    tbody.innerHTML = `
+      <tr style="background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;">
+        <td><input type="checkbox" checked /></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#ef4444,#f87171);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">M</div>
+            <div>
+              <div style="font-weight:700;font-size:14px;color:#fff;">Mr. Ravi</div>
+              <div style="font-size:11px;color:var(--text-muted);">P-002</div>
+            </div>
+          </div>
+        </td>
+        <td>68 / Male</td>
+        <td><span style="color:#ef4444;font-weight:600;">Cardiac Risk</span></td>
+        <td><span style="color:#ef4444;font-weight:700;">BP 165/105</span><br><span style="font-size:11px;color:#ef4444;">HR 145</span></td>
+        <td><span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-weight:700;">Critical</span></td>
+        <td style="text-align:right;">
+          <button class="btn btn-primary btn-sm" onclick="startAssignWizard('ravi')">🔗 Assign</button>
+        </td>
+      </tr>
+    `;
+    document.getElementById('unassignedCountBadge').textContent = '1';
+  } else {
+    document.getElementById('unassignedCountBadge').textContent = '3';
+    tbody.innerHTML = `
+      <tr>
+        <td><input type="checkbox" /></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#60a5fa);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">M</div>
+            <div><div style="font-weight:700;font-size:14px;color:#fff;">Meena Pillai</div><div style="font-size:11px;color:var(--text-muted);">P-001</div></div>
+          </div>
+        </td>
+        <td>38 / Female</td>
+        <td>Diabetes, Hypertension</td>
+        <td>BP 140/90 • HR 78</td>
+        <td><span class="badge badge-warning" style="background:rgba(245,158,11,0.15);color:#f59e0b;">Needs Doctor</span></td>
+        <td style="text-align:right;"><button class="btn btn-primary btn-sm" onclick="startAssignWizard('meena')">🔗 Assign</button></td>
+      </tr>
+      <tr style="background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;">
+        <td><input type="checkbox" checked /></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#ef4444,#f87171);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">M</div>
+            <div><div style="font-weight:700;font-size:14px;color:#fff;">Mr. Ravi</div><div style="font-size:11px;color:var(--text-muted);">P-002</div></div>
+          </div>
+        </td>
+        <td>68 / Male</td>
+        <td><span style="color:#ef4444;font-weight:600;">Cardiac Risk</span></td>
+        <td><span style="color:#ef4444;font-weight:700;">BP 165/105 • HR 145</span></td>
+        <td><span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;">Critical</span></td>
+        <td style="text-align:right;"><button class="btn btn-primary btn-sm" onclick="startAssignWizard('ravi')">🔗 Assign</button></td>
+      </tr>
+      <tr>
+        <td><input type="checkbox" /></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;">R</div>
+            <div><div style="font-weight:700;font-size:14px;color:#fff;">Rajan Kumar</div><div style="font-size:11px;color:var(--text-muted);">P-003</div></div>
+          </div>
+        </td>
+        <td>45 / Male</td>
+        <td>Fever, Respiratory</td>
+        <td>Temp 101°F • SpO2 96%</td>
+        <td><span class="badge badge-warning" style="background:rgba(245,158,11,0.15);color:#f59e0b;">Needs Doctor</span></td>
+        <td style="text-align:right;"><button class="btn btn-primary btn-sm" onclick="startAssignWizard('rajan')">🔗 Assign</button></td>
+      </tr>
+    `;
+  }
+}
+
+function filterAssignTable(query) {
+  filterTable('assignPatientsTableBody', query);
+}
+
+function closeAssignWizard() {
+  const modal = document.getElementById('assignWizardModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// STEP 2: Select a Patient
+function startAssignWizard(patientKey) {
+  currentAssignPatient = patientKey;
+  const modal = document.getElementById('assignWizardModal');
+  const container = document.getElementById('assignWizardModalContent');
+  modal.classList.remove('hidden');
+
+  container.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;">2</div>
+        <div style="font-size:16px;font-weight:800;color:#fff;">Select a Patient</div>
+      </div>
+      <button class="modal-close" onclick="closeAssignWizard()">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:20px;">
+      Doctor chooses the patient and clicks Assign to evaluate specialty match.
+    </div>
+
+    <!-- Patient Highlight Card -->
+    <div style="background:rgba(14,24,40,0.9);border:1px solid rgba(239,68,68,0.4);border-radius:14px;padding:20px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #ef4444;" alt="Patient" />
+          <div>
+            <div style="font-size:17px;font-weight:800;color:#fff;">Mr. Ravi</div>
+            <div style="font-size:12px;color:var(--text-muted);">Patient ID: P-002 &nbsp;|&nbsp; Age: 68 &nbsp;|&nbsp; Male</div>
+          </div>
+        </div>
+        <span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;font-weight:700;">❤️ Critical</span>
+      </div>
+
+      <!-- Vitals Strip -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center;">
+          <div style="color:#ef4444;font-size:18px;font-weight:800;">145 bpm</div>
+          <div style="font-size:11px;color:var(--text-muted);">Heart Rate</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center;">
+          <div style="color:#38bdf8;font-size:18px;font-weight:800;">88%</div>
+          <div style="font-size:11px;color:var(--text-muted);">SpO2</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center;">
+          <div style="color:#c084fc;font-size:18px;font-weight:800;">165/105</div>
+          <div style="font-size:11px;color:var(--text-muted);">Blood Pressure</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center;">
+          <div style="color:#fbbf24;font-size:18px;font-weight:800;">101.2°F</div>
+          <div style="font-size:11px;color:var(--text-muted);">Temperature</div>
+        </div>
+      </div>
+
+      <!-- Conditions & Notes -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12.5px;">
+        <div>
+          <div style="font-weight:700;color:#fff;margin-bottom:6px;">Known Conditions</div>
+          <div style="color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;">
+            <span>🔴 Hypertension</span>
+            <span>🔴 Cardiac risk</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-weight:700;color:#fff;margin-bottom:6px;">Recent Notes</div>
+          <div style="color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;">
+            <span>• Emergency alert triggered 1 hour ago</span>
+            <span>• Location permission unavailable</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px;">
+      <button class="btn btn-ghost" onclick="closeAssignWizard()">Cancel</button>
+      <button class="btn btn-primary" style="padding:10px 24px;font-weight:700;" onclick="wizardStep3('ravi')">
+        Assign Doctor →
+      </button>
+    </div>
+  `;
+}
+
+// STEP 3: Choose a Doctor
+function wizardStep3(patientKey) {
+  const container = document.getElementById('assignWizardModalContent');
+  container.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;">3</div>
+        <div style="font-size:16px;font-weight:800;color:#fff;">Choose a Doctor</div>
+      </div>
+      <button class="modal-close" onclick="closeAssignWizard()">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">
+      Select the most suitable doctor based on department, availability, and workload.
+    </div>
+
+    <div class="doctor-match-layout">
+      <!-- Left Filters -->
+      <div style="background:rgba(10,16,26,0.6);border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px;">Filters</div>
+        <div class="form-group mb-16">
+          <label class="form-label" style="font-size:11.5px;">Specialization</label>
+          <select class="form-select" style="font-size:12px;">
+            <option value="Cardiology">Cardiology</option>
+            <option value="General">General Physician</option>
+            <option value="Neurology">Neurology</option>
+          </select>
+        </div>
+        <div class="form-group mb-16">
+          <label class="form-label" style="font-size:11.5px;">Availability</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);cursor:pointer;margin-bottom:6px;">
+            <input type="checkbox" checked /> Available Now
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
+            <input type="checkbox" /> On Duty
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-size:11.5px;">Sort By</label>
+          <select class="form-select" style="font-size:12px;">
+            <option value="best">Best Match</option>
+            <option value="experience">Experience</option>
+            <option value="rating">Rating</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Right Doctor Cards -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <!-- Doctor 1: Dr. Priya Sharma (Selected) -->
+        <div class="doctor-match-card selected" id="docCardPriya" onclick="selectDoctorMatchCard('priya')">
+          <input type="radio" name="selectedDoc" checked style="accent-color:var(--primary);" />
+          <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&auto=format&fit=crop&q=80" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" alt="Doctor" />
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-weight:700;font-size:14px;color:#fff;">Dr. Priya Sharma</span>
+              <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;font-size:11px;">Available</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:2px 0;">Cardiologist • 5 years experience</div>
+            <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary);">
+              <span>⭐ 4.8 (120 reviews)</span>
+              <span>👥 12 patients</span>
+              <span style="color:#10b981;">🟢 Low workload</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Doctor 2: Dr. Arjun Mehta -->
+        <div class="doctor-match-card" id="docCardArjun" onclick="selectDoctorMatchCard('arjun')">
+          <input type="radio" name="selectedDoc" style="accent-color:var(--primary);" />
+          <img src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=100&auto=format&fit=crop&q=80" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" alt="Doctor" />
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-weight:700;font-size:14px;color:#fff;">Dr. Arjun Mehta</span>
+              <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;font-size:11px;">Available</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:2px 0;">Cardiologist • 8 years experience</div>
+            <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary);">
+              <span>⭐ 4.6 (98 reviews)</span>
+              <span>👥 18 patients</span>
+              <span style="color:#fdcb6e;">🟡 Medium workload</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Doctor 3: Dr. Kavya Nair -->
+        <div class="doctor-match-card" id="docCardKavya" onclick="selectDoctorMatchCard('kavya')">
+          <input type="radio" name="selectedDoc" style="accent-color:var(--primary);" />
+          <img src="https://images.unsplash.com/photo-1594824813583-b1d550e583c2?w=100&auto=format&fit=crop&q=80" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" alt="Doctor" />
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-weight:700;font-size:14px;color:#fff;">Dr. Kavya Nair</span>
+              <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;font-size:11px;">Available</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:2px 0;">General Physician • 3 years experience</div>
+            <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary);">
+              <span>⭐ 4.5 (80 reviews)</span>
+              <span>👥 15 patients</span>
+              <span style="color:#10b981;">🟢 Low workload</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;margin-top:20px;">
+      <button class="btn btn-ghost" onclick="startAssignWizard('ravi')">← Back</button>
+      <button class="btn btn-primary" onclick="wizardStep4('priya')">Review &amp; Confirm →</button>
+    </div>
+  `;
+}
+
+function selectDoctorMatchCard(docKey) {
+  currentAssignDoctor = docKey;
+  document.querySelectorAll('.doctor-match-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById(`docCard${docKey.charAt(0).toUpperCase() + docKey.slice(1)}`);
+  if (card) {
+    card.classList.add('selected');
+    const radio = card.querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+  }
+}
+
+// STEP 4: Confirm Assignment
+function wizardStep4(docKey) {
+  const container = document.getElementById('assignWizardModalContent');
+  container.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;">4</div>
+        <div style="font-size:16px;font-weight:800;color:#fff;">Confirm Assignment</div>
+      </div>
+      <button class="modal-close" onclick="closeAssignWizard()">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">
+      Review the details and confirm the doctor assignment.
+    </div>
+
+    <!-- Connector Flow -->
+    <div style="background:rgba(10,16,26,0.6);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;">
+      <!-- Patient -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80" style="width:42px;height:42px;border-radius:50%;object-fit:cover;" alt="Patient" />
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#fff;">Mr. Ravi</div>
+            <div style="font-size:11px;color:var(--text-muted);">Age: 68 | Male | ID: P-002</div>
+          </div>
+        </div>
+        <span class="badge badge-danger" style="background:rgba(239,68,68,0.2);color:#ef4444;">Critical</span>
+      </div>
+
+      <!-- Arrow -->
+      <div style="text-align:center;padding:10px 0;color:var(--primary);font-size:18px;">↓</div>
+
+      <!-- Doctor -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:4px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&auto=format&fit=crop&q=80" style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);" alt="Doctor" />
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#fff;">Dr. Priya Sharma</div>
+            <div style="font-size:11px;color:var(--text-muted);">Cardiologist</div>
+          </div>
+        </div>
+        <span class="badge badge-normal" style="background:rgba(16,185,129,0.2);color:#10b981;">Available now</span>
+      </div>
+    </div>
+
+    <!-- What will happen checklist -->
+    <div class="confirm-checklist-box">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px;">What will happen?</div>
+      <div class="checklist-item">
+        <span style="color:#10b981;">✓</span>
+        <span>Dr. Priya Sharma will be assigned as the primary doctor</span>
+      </div>
+      <div class="checklist-item">
+        <span style="color:#10b981;">✓</span>
+        <span>Doctor will receive a notification</span>
+      </div>
+      <div class="checklist-item">
+        <span style="color:#10b981;">✓</span>
+        <span>Patient will be notified (if enabled)</span>
+      </div>
+      <div class="checklist-item">
+        <span style="color:#10b981;">✓</span>
+        <span>Assignment will appear in patient and doctor dashboards</span>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px;">
+      <button class="btn btn-ghost" onclick="wizardStep3('ravi')">Cancel</button>
+      <button class="btn btn-primary" style="padding:10px 24px;font-weight:700;" onclick="wizardStep5()">Confirm Assignment</button>
+    </div>
+  `;
+}
+
+// STEP 5: Success Output
+function wizardStep5() {
+  const container = document.getElementById('assignWizardModalContent');
+  container.innerHTML = `
+    <div style="text-align:center;padding:30px 10px;">
+      <div class="success-checkmark-wrapper">✓</div>
+      <div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:8px;">Doctor Assigned Successfully!</div>
+      <div style="font-size:14px;color:var(--text-secondary);margin-bottom:28px;">
+        Dr. Priya Sharma has been assigned to Mr. Ravi.
+      </div>
+      <div style="display:flex;justify-content:center;gap:14px;">
+        <button class="btn btn-ghost" onclick="closeAssignWizard();viewPatientDetails('ravi')">
+          View Patient Profile
+        </button>
+        <button class="btn btn-primary" onclick="closeAssignWizard()">
+          Back to Assign Doctor
+        </button>
+      </div>
+    </div>
+  `;
 }
