@@ -1,0 +1,10 @@
+{
+  "name": "carelink-root",
+  "version": "1.0.0",
+  "description": "MediLink AI - Monorepo root runner",
+  "scripts": {
+    "start": "npm start --prefix backend",
+    "dev": "npm run dev --prefix backend",
+    "test": "npm test --prefix backend"
+  }
+}
