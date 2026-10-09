@@ -1,5 +1,13 @@
+const dns = require('dns');
 const mongoose = require('mongoose');
 const { sanitizeSecrets } = require('./env');
+
+// On Windows/Node environments where local router DNS fails on SRV lookups, configure public DNS resolvers
+if (typeof dns.setServers === 'function') {
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  } catch (_) {}
+}
 
 const connectDB = async () => {
   const isProduction = process.env.NODE_ENV === 'production';
