@@ -9,40 +9,48 @@ The MediLink AI frontend is a pure HTML5, CSS3, and ES6+ JavaScript client archi
 ```
 frontend/
 │
-├── components/
-│   └── carelink-ai/          # Embedded AI Assistant chat widget
-│       ├── ai-chat.css       # Widget styling and floating dialog animations
-│       ├── ai-chat.js        # Chat client controller, WebSocket & REST communication
-│       └── ai-config.js      # Role-specific AI prompts, disclaimer banners & capabilities
+├── pages/                        # HTML pages for each portal
+│   ├── index.html                # Login / landing page
+│   ├── patient.html              # Patient portal
+│   ├── doctor.html               # Doctor portal
+│   ├── admin.html                # Admin / hospital portal
+│   ├── lab.html                  # Laboratory portal
+│   ├── pharmacy.html             # Pharmacy portal
+│   ├── insurance.html            # Insurance portal
+│   ├── emergency.html            # Emergency command dashboard
+│   └── auth-success.html         # OAuth callback page
 │
-├── css/
-│   └── style.css             # Unified healthcare design system, tokens, CSS variables, dark mode
+├── assets/                       # Static assets
+│   ├── images/
+│   ├── icons/
+│   └── fonts/
 │
-├── js/                       # Portal controllers and client-side utilities
-│   ├── admin.js              # Hospital Administrator dashboard logic
-│   ├── auth-success.js       # OAuth 2.0 post-login landing logic
-│   ├── auth.js               # Session management, HttpOnly cookie requests, logout handlers
-│   ├── doctor.js             # Doctor dashboard, patient records review, emergency alerts modal
-│   ├── emergency.js          # SOS Emergency Command Center, live GIS mapping & unit dispatch
-│   ├── index.js              # Landing page UI interactions
-│   ├── insurance.js          # Insurance officer claims review
-│   ├── lab.js                # Laboratory worklist, sample collection, report upload
-│   ├── patient.js            # Patient self-service portal, vitals graph, EHR view, SOS button
-│   ├── pharmacy.js           # Pharmacy dispensing, medication logs
-│   └── wearable.js           # Simulated continuous sensor telemetry generator
+├── css/                          # Stylesheets
+│   ├── style.css                 # Master stylesheet
+│   ├── components/               # Component-specific styles
+│   └── pages/                    # Page-specific styles
 │
-├── admin.html                # Hospital Admin Portal
-├── auth-success.html         # OAuth Callback Landing View
-├── doctor.html               # Doctor Clinical Portal
-├── emergency.html            # SOS Emergency Command Center
-├── index.html                # Public Landing Page & Unified Authentication Portal
-├── insurance.html            # Insurance Claims Portal
-├── lab.html                  # Laboratory & Pathology Portal
-├── patient.html              # Patient Health Portal
-├── pharmacy.html             # Pharmacy Portal
-├── nginx.conf                # Nginx production reverse proxy & static asset delivery rules
-├── Dockerfile                # Production container definition (Nginx Alpine)
-└── .dockerignore             # Docker build exclusions
+├── js/                           # Browser-side JavaScript
+│   ├── core/                     # Shared frontend utilities (locationService.js, core.js)
+│   ├── auth/                     # Login and authentication UI (auth.js, auth-success.js)
+│   ├── patient/                  # Patient portal functionality (patient.js)
+│   ├── doctor/                   # Doctor portal functionality (doctor.js)
+│   ├── admin/                    # Admin portal functionality (admin.js)
+│   ├── laboratory/               # Laboratory portal functionality (lab.js)
+│   ├── pharmacy/                 # Pharmacy portal functionality (pharmacy.js)
+│   ├── insurance/                # Insurance portal functionality (insurance.js)
+│   ├── emergency/                # Emergency dashboard functionality (emergency.js)
+│   ├── wearable/                 # Wearable simulator (wearable.js)
+│   └── ai-assistant/             # AI chat interface (ai-chat.js)
+│
+├── components/                   # Reusable frontend components
+│   └── carelink-ai/              # AI Assistant chat widget
+│
+├── config/                       # Frontend-safe configuration (frontend.config.js)
+├── tests/                        # Frontend smoke and verification tests (smoke.test.js)
+├── Dockerfile                    # Production container definition (Nginx Alpine)
+├── nginx.conf                    # Nginx reverse proxy & static file server config
+└── README.md                     # Frontend documentation
 ```
 
 ---

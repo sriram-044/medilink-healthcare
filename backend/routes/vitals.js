@@ -81,21 +81,50 @@ router.post('/', auth, async (req, res, next) => {
   }
 });
 
-// POST /api/vitals/wearable-sync — simulated smartwatch telemetry endpoint
+// POST /api/vitals/wearable-sync — simulated & live smartwatch telemetry endpoint
 router.post('/wearable-sync', auth, async (req, res, next) => {
   try {
-    const { heartRate, spo2, temperature, stepCount, fallDetected, roomLocation } = req.body;
+    const {
+      heartRate,
+      spo2,
+      temperature,
+      systolicBP,
+      diastolicBP,
+      glucoseLevel,
+      stepCount,
+      fallDetected,
+      roomLocation,
+      location,
+      source,
+      isSimulated
+    } = req.body;
     const patientId = req.user.role === 'patient' ? req.user._id : (req.body.patientId || req.user._id);
 
-    const ai = analyzeVitals(heartRate, spo2, temperature, stepCount || 0, null, null, Boolean(fallDetected));
+    const ai = analyzeVitals(
+      heartRate,
+      spo2,
+      temperature,
+      stepCount || 0,
+      systolicBP || null,
+      diastolicBP || null,
+      Boolean(fallDetected)
+    );
+
+    const resolvedLocationStr = (typeof location === 'string' ? location : (location?.address || roomLocation)) || 'Room 104, Sunrise Senior Home';
 
     const vitals = new VitalSigns({
       patientId,
-      heartRate, spo2, temperature,
-      stepCount,
+      heartRate,
+      spo2,
+      temperature,
+      systolicBP: systolicBP || undefined,
+      diastolicBP: diastolicBP || undefined,
+      glucoseLevel: glucoseLevel || undefined,
+      stepCount: stepCount || 0,
       fallDetected: Boolean(fallDetected),
-      source: 'wearable',
-      location: roomLocation || 'Room 104, Sunrise Senior Home',
+      source: source || (isSimulated ? 'simulated_wearable' : 'wearable'),
+      isSimulated: Boolean(isSimulated),
+      location: resolvedLocationStr,
       aiScore: ai.score,
       aiStatus: ai.status,
       aiReasons: ai.reasons,
@@ -112,10 +141,16 @@ router.post('/wearable-sync', auth, async (req, res, next) => {
         doctorId: patient?.assignedDoctor,
         type: 'Critical',
         score: ai.score,
-        vitals: { heartRate, spo2, temperature },
+        vitals: {
+          heartRate,
+          spo2,
+          temperature,
+          systolicBP: systolicBP || undefined,
+          diastolicBP: diastolicBP || undefined
+        },
         reasons: ai.reasons,
         fallDetected: Boolean(fallDetected),
-        location: roomLocation || patient?.roomLocation || 'Room 104, Sunrise Senior Home'
+        location: location || roomLocation || patient?.roomLocation || resolvedLocationStr
       });
     }
 

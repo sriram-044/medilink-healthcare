@@ -8,7 +8,62 @@ This report documents findings from an architectural inspection of the MediLink 
 
 | Category | Item / Location | Status | Risk Level | Recommended Action |
 | :--- | :--- | :--- | :--- | :--- |
-| **Legacy Model** | [`backend/models/Report.js`](file:///d:/code/MediLink%20AI/backend/models/Report.js) vs [`MedicalReport.js`](file:///d:/code/MediLink%20AI/backend/models/MedicalReport.js) | Active Legacy | Medium | **Preserve for backward compatibility**; document deprecation. |
+| **Legacy Model*TASK: Remove the red "CRITICAL EMERGENCY ESCALATION ACTIVE" alert box
+from the MediLink AI Patient Portal overview.
+
+CURRENT ISSUE:
+After clicking "Simulate Emergency Event", a large red-bordered
+emergency escalation panel appears inside the Wearable Telemetry
+Simulator. It occupies too much space and makes the dashboard cluttered.
+
+REQUIRED CHANGES:
+
+1. Remove the large red emergency escalation panel from the patient
+   overview UI, including its red background, border, and detailed
+   incident information.
+
+2. Preserve the existing emergency simulation functionality:
+   - Fall-event simulation
+   - Abnormal vital-sign generation
+   - AI risk assessment
+   - EmergencyCase database persistence
+   - Configured caregiver, family, and doctor notifications
+   - Hospital dispatch workflow
+   - GPS location integration
+
+3. Continue displaying emergency information in the existing
+   "Recent Alerts" section and "AI Health Analysis" card.
+
+4. When an emergency simulation occurs:
+   - Update the vital-sign cards.
+   - Update the AI risk score.
+   - Add or update the appropriate alert in Recent Alerts.
+   - Display the appropriate status in AI Health Analysis.
+   - Show a small, non-intrusive "SIMULATED EMERGENCY" badge if needed.
+
+5. Do not remove the separate red SOS button in the top navigation.
+   It must continue to work independently.
+
+6. Remove the panel's HTML and dedicated CSS only if they are no
+   longer used elsewhere. Check JavaScript references before removal.
+
+7. Do not disable emergency alerts or backend processing merely to
+   hide the panel.
+
+8. Preserve the current dark CareLink/MediLink design and responsive
+   layout.
+
+9. Run the relevant wearable simulator and emergency regression tests.
+
+FIRST inspect the existing implementation, then make the smallest
+safe changes necessary.
+
+EXPECTED RESULT:
+The Patient Portal should no longer display the large red
+"CRITICAL EMERGENCY ESCALATION ACTIVE" box.
+
+Emergency events should still be processed normally and displayed
+through the existing Recent Alerts and AI Health Analysis sections.* | [`backend/models/Report.js`](file:///d:/code/MediLink%20AI/backend/models/Report.js) vs [`MedicalReport.js`](file:///d:/code/MediLink%20AI/backend/models/MedicalReport.js) | Active Legacy | Medium | **Preserve for backward compatibility**; document deprecation. |
 | **Legacy Route** | [`backend/routes/reports.js`](file:///d:/code/MediLink%20AI/backend/routes/reports.js) vs [`medicalReports.js`](file:///d:/code/MediLink%20AI/backend/routes/medicalReports.js) | Active Legacy | Medium | **Preserve**; existing integrations use `/api/reports`. |
 | **AI Subsystems** | [`backend/utils/aiEngine.js`](file:///d:/code/MediLink%20AI/backend/utils/aiEngine.js), [`reportAiEngine.js`](file:///d:/code/MediLink%20AI/backend/utils/reportAiEngine.js), [`utils/ai/`](file:///d:/code/MediLink%20AI/backend/utils/ai/) | Distinct Responsibilities | Low | **Preserve**; each handles distinct clinical AI subdomains. |
 | **Emergency Modules** | [`backend/utils/emergencyEngine.js`](file:///d:/code/MediLink%20AI/backend/utils/emergencyEngine.js), [`emergencySosService.js`](file:///d:/code/MediLink%20AI/backend/utils/emergencySosService.js), [`emergencyCommunicationService.js`](file:///d:/code/MediLink%20AI/backend/utils/emergencyCommunicationService.js) | Distinct Responsibilities | Low | **Preserve**; modular division of dispatch, timeline, and SMS. |

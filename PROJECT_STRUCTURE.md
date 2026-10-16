@@ -53,145 +53,156 @@
 ## 2. Current Folder Structure
 
 ```
-d:\code\MediLink AI/
+medilink-ai/
 │
-├── .dockerignore
-├── .env                              # Active local environment variables (NEVER committed)
-├── .env.example                      # Production-ready environment template with placeholders
-├── .gitignore                        # Git ignore rules
-├── README.md                         # Master documentation & SOS system specs
-├── docker-compose.yml                # Production multi-service orchestration
-├── docker-compose.dev.yml            # Development hot-reload multi-service orchestration
+├── frontend/                         # All website frontend code
+│   │
+│   ├── pages/                        # HTML pages for each portal
+│   │   ├── index.html                # Login / landing page
+│   │   ├── patient.html              # Patient portal
+│   │   ├── doctor.html               # Doctor portal
+│   │   ├── admin.html                # Admin / hospital portal
+│   │   ├── lab.html                  # Laboratory portal
+│   │   ├── pharmacy.html             # Pharmacy portal
+│   │   ├── insurance.html            # Insurance portal
+│   │   ├── emergency.html            # Emergency command dashboard
+│   │   └── auth-success.html         # OAuth callback page
+│   │
+│   ├── assets/                       # Static assets
+│   │   ├── images/
+│   │   ├── icons/
+│   │   └── fonts/
+│   │
+│   ├── css/                          # Stylesheets
+│   │   ├── style.css                 # Master design system & component styles
+│   │   ├── components/               # Modular component stylesheets
+│   │   └── pages/                    # Page-specific styling overrides
+│   │
+│   ├── js/                           # Browser-side JavaScript
+│   │   ├── core/                     # Shared frontend utilities (locationService.js, core.js)
+│   │   ├── auth/                     # Login and authentication UI (auth.js, auth-success.js)
+│   │   ├── patient/                  # Patient portal functionality (patient.js)
+│   │   ├── doctor/                   # Doctor portal functionality (doctor.js)
+│   │   ├── admin/                    # Admin portal functionality (admin.js)
+│   │   ├── laboratory/               # Laboratory portal functionality (lab.js)
+│   │   ├── pharmacy/                 # Pharmacy portal functionality (pharmacy.js)
+│   │   ├── insurance/                # Insurance portal functionality (insurance.js)
+│   │   ├── emergency/                # Emergency dashboard functionality (emergency.js)
+│   │   ├── wearable/                 # Wearable simulator (wearable.js)
+│   │   └── ai-assistant/             # AI chat interface (ai-chat.js)
+│   │
+│   ├── components/                   # Reusable frontend components
+│   │   └── carelink-ai/              # Embedded AI Assistant chat widget
+│   │
+│   ├── config/                       # Frontend-safe configuration (frontend.config.js)
+│   ├── tests/                        # Frontend tests (smoke.test.js)
+│   ├── Dockerfile                    # Production container definition (Nginx Alpine)
+│   ├── nginx.conf                    # Nginx reverse proxy & static file server config
+│   └── README.md
 │
-├── android/                          # Native Android Mobile Client
-│   ├── app/                          # Android application module
-│   │   ├── build.gradle.kts          # App-level dependencies & Health Connect SDK
-│   │   └── src/                      # Kotlin source code, Jetpack Compose UI & ViewModels
-│   ├── gradle/                       # Gradle wrapper binaries & properties
-│   ├── build.gradle.kts              # Root Android build configuration
-│   ├── settings.gradle.kts           # Android Gradle settings
-│   ├── gradle.properties             # JVM & AndroidX settings
-│   └── gradlew.bat                   # Gradle Windows wrapper executable
-│
-├── backend/                          # Node.js / Express REST API & WebSocket Server
-│   ├── cert/                         # SSL/TLS certificates
-│   │   └── cert.crt
-│   ├── config/                       # Core system configuration
+├── backend/                          # Node.js + Express application
+│   │
+│   ├── server.js                     # Application entry point
+│   │
+│   ├── config/                       # Database and app configuration
 │   │   ├── db.js                     # MongoDB connection & in-memory fallback
 │   │   ├── env.js                    # Production secrets validation & sanitization
 │   │   └── passport.js               # Google OAuth 2.0 Passport strategy
-│   ├── middleware/                   # Express HTTP middleware pipeline
-│   │   ├── auth.js                   # JWT cookie & header authentication
-│   │   ├── errorHandler.js           # Centralized security error handler & 404 handler
-│   │   ├── requestId.js              # Request correlation ID injector
-│   │   └── role.js                   # Role-based access control (RBAC) guard
-│   ├── models/                       # Mongoose database models & indexes
-│   │   ├── Alert.js                  # Clinical threshold alerts
-│   │   ├── EmergencyCase.js          # SOS emergency incident tracking & timeline
-│   │   ├── HospitalVisit.js          # Patient hospital encounter history
-│   │   ├── InsuranceClaim.js         # Insurance reimbursement claims
-│   │   ├── MedicalReport.js          # Multi-format diagnostic reports & AI summaries
-│   │   ├── Medication.js             # Prescriptions & personalized diet plans
-│   │   ├── Notification.js           # In-app and push notification log
-│   │   ├── Report.js                 # Legacy medical report schema
-│   │   ├── Sample.js                 # Biospecimen tracking & barcodes
-│   │   ├── TestRequest.js            # Laboratory test order worklist
-│   │   ├── User.js                   # System user accounts & emergency contacts
-│   │   └── VitalSigns.js             # Telemetric vitals time-series data
-│   ├── routes/                       # Express API route definitions
-│   │   ├── admin.js                  # Admin user directory, audit logs, system metrics
-│   │   ├── ai.js                     # AI clinical assistant endpoints
-│   │   ├── alerts.js                 # Clinical alerts CRUD
-│   │   ├── auth.js                   # User registration, login, logout, /me
-│   │   ├── emergency.js              # SOS dispatch, lifecycle, contacts, teams
-│   │   ├── googleAuth.js             # OAuth redirect and callback routes
-│   │   ├── insurance.js              # Insurance claim submission & review
-│   │   ├── lab.js                    # Lab dashboard, test requests, samples
-│   │   ├── medicalReports.js         # Report upload, secure streaming preview, EHR publish
-│   │   ├── medication.js             # Medication and diet plan management
-│   │   ├── patients.js               # Patient directory, medical history, vitals
-│   │   ├── pharmacy.js               # Pharmacy orders & fulfillment
-│   │   ├── reports.js                # Legacy report routes
-│   │   └── vitals.js                 # Wearable telemetry ingestion
-│   ├── utils/                        # Services, helper functions & business logic
-│   │   ├── ai/                       # LLM & RAG architecture modules
-│   │   │   ├── rag/                  # Retrieval-Augmented Generation pipeline
-│   │   │   │   ├── ragAuthorization.js
-│   │   │   │   ├── ragChunker.js
-│   │   │   │   ├── ragConfig.js
-│   │   │   │   ├── ragContext.js
-│   │   │   │   ├── ragRetriever.js
-│   │   │   │   ├── ragService.js
-│   │   │   │   └── ragSources.js
-│   │   │   ├── aiAuthorization.js
-│   │   │   ├── aiConfig.js
-│   │   │   ├── aiContext.js
-│   │   │   ├── aiLogger.js
-│   │   │   ├── aiPrompts.js
-│   │   │   ├── aiProvider.js
-│   │   │   ├── aiSafety.js
-│   │   │   └── aiService.js
-│   │   ├── aiEngine.js               # Vitals anomaly detection engine
-│   │   ├── autoSeed.js               # Demo dataset seeder for all 8 portals
-│   │   ├── criticalDetection.js      # Critical clinical threshold logic
-│   │   ├── documentIntelligence.js   # PDF & text parsing for reports
-│   │   ├── emergencyCommunicationService.js # SMS and push emergency dispatcher
-│   │   ├── emergencyEngine.js        # Multi-party emergency alert coordinator
-│   │   ├── emergencySosService.js    # SOS architecture service & vitals evaluator
-│   │   ├── errors.js                 # Standardized operational error classes
-│   │   ├── fileValidator.js          # Magic byte & MIME type file security
-│   │   ├── notificationService.js    # Cross-portal notification broadcaster
-│   │   ├── paginationHelper.js       # Production-safe pagination parser
-│   │   ├── queryHelper.js            # Sanitized MongoDB search & date builder
-│   │   ├── reportAiEngine.js         # Automated medical report AI analyzer
-│   │   ├── scheduler.js              # Background cron scheduler
-│   │   ├── socket.js                 # WebSocket event emitter & handler
-│   │   └── storageService.js         # Protected local file storage manager
-│   ├── uploads/                      # Persistent storage for uploaded medical reports
-│   │   └── temp/                     # Temporary staging folder for uploads
-│   ├── server.js                     # Express application bootstrap & server entry point
-│   ├── package.json                  # Backend dependencies and scripts
-│   ├── package-lock.json             # Locked dependency tree
-│   ├── Dockerfile                    # Production backend container definition
-│   ├── Dockerfile.dev                # Development backend container definition
-│   ├── .dockerignore                 # Backend docker build exclusions
-│   ├── .env.example                  # Backend environment template
-│   └── [21 Test Files]               # (test_*.js & run_all_tests.js currently in root of backend/)
+│   │
+│   ├── routes/                       # HTTP API endpoints
+│   │   ├── auth.js
+│   │   ├── patients.js
+│   │   ├── vitals.js
+│   │   ├── doctors.js                # Doctor dashboard and patient assignments
+│   │   ├── hospitals.js
+│   │   ├── emergency.js
+│   │   ├── lab.js
+│   │   ├── pharmacy.js
+│   │   ├── insurance.js
+│   │   └── ai.js
+│   │
+│   ├── controllers/                  # Request handling
+│   │   ├── authController.js
+│   │   ├── patientController.js
+│   │   ├── emergencyController.js
+│   │   └── index.js
+│   │
+│   ├── services/                     # Business logic and integrations
+│   │   ├── emergency/
+│   │   ├── wearable/
+│   │   ├── notifications/
+│   │   ├── hospitals/
+│   │   └── ai/
+│   │
+│   ├── middleware/                   # Request processing and security
+│   │   ├── auth.js
+│   │   ├── role.js
+│   │   ├── errorHandler.js
+│   │   └── requestId.js
+│   │
+│   ├── models/                       # MongoDB / Mongoose schemas
+│   │   ├── User.js
+│   │   ├── VitalSigns.js
+│   │   ├── EmergencyCase.js
+│   │   ├── MedicalReport.js
+│   │   ├── Medication.js
+│   │   └── ...
+│   │
+│   ├── validators/                   # Request validation
+│   ├── utils/                        # Shared backend utilities
+│   ├── sockets/                      # Socket.IO handlers
+│   ├── jobs/                         # Scheduled tasks
+│   ├── tests/                        # Backend test suites
+│   │   ├── unit/
+│   │   ├── integration/
+│   │   ├── security/
+│   │   ├── regression/
+│   │   └── run_all_tests.js
+│   │
+│   ├── uploads/                      # Private uploads
+│   └── README.md
 │
-├── frontend/                         # Pure HTML5 / CSS3 / ES6+ Web Application
-│   ├── components/                   # Reusable frontend UI widgets
-│   │   └── carelink-ai/              # AI Assistant chat widget
-│   │       ├── ai-chat.css           # Chat widget styling
-│   │       ├── ai-chat.js            # Chat widget logic & WebSocket integration
-│   │       └── ai-config.js          # Chat configuration & role settings
-│   ├── css/                          # Stylesheets
-│   │   └── style.css                 # Master design system & component styles
-│   ├── js/                           # Frontend portal scripts & controllers
-│   │   ├── admin.js                  # Hospital administrator portal logic
-│   │   ├── auth-success.js           # OAuth post-login redirect processor
-│   │   ├── auth.js                   # Session authentication, login/logout, cookies
-│   │   ├── doctor.js                 # Doctor clinical dashboard & patient review
-│   │   ├── emergency.js              # SOS emergency command center dashboard
-│   │   ├── index.js                  # Landing page interactions
-│   │   ├── insurance.js              # Insurance claim reviewer logic
-│   │   ├── lab.js                    # Laboratory worklist, sample & report upload
-│   │   ├── patient.js                # Patient portal, vitals graph & health record
-│   │   ├── pharmacy.js               # Pharmacy prescription fulfillment
-│   │   └── wearable.js               # Simulated wearable sensor telemetry feeder
-│   ├── admin.html                    # Admin portal page
-│   ├── auth-success.html             # OAuth callback landing page
-│   ├── doctor.html                   # Doctor portal page
-│   ├── emergency.html                # Emergency response command center page
-│   ├── index.html                    # Public landing page & authentication portal
-│   ├── insurance.html                # Insurance portal page
-│   ├── lab.html                      # Laboratory portal page
-│   ├── patient.html                  # Patient portal page
-│   ├── pharmacy.html                 # Pharmacy portal page
-│   ├── nginx.conf                    # Nginx reverse proxy & static file server config
-│   ├── Dockerfile                    # Frontend container definition
-│   └── .dockerignore                 # Frontend docker build exclusions
+├── android/                          # Native Android application
+│   ├── app/
+│   ├── gradle/
+│   ├── build.gradle.kts
+│   ├── settings.gradle.kts
+│   └── README.md
 │
-└── docs/                             # Project Architecture Documentation
+├── database/                         # Database-related resources
+│   ├── schema/
+│   ├── seed/
+│   ├── indexes/
+│   ├── migrations/
+│   └── README.md
+│
+├── docs/                             # Project documentation
+│   ├── architecture/
+│   ├── api/
+│   ├── setup/
+│   ├── security/
+│   ├── ai/
+│   ├── database/
+│   └── deployment/
+│
+├── scripts/                          # Development and maintenance scripts
+│   ├── setup/
+│   ├── development/
+│   └── maintenance/
+│
+├── tests/                            # Cross-module tests
+│   └── e2e/
+│
+├── .env.example
+├── .gitignore
+├── .dockerignore
+├── docker-compose.yml
+├── docker-compose.dev.yml
+├── package.json
+├── package-lock.json
+├── README.md
+├── PROJECT_STRUCTURE.md
+└── PROJECT_FILE_MAP.md
     ├── AI_PROVIDER_GUIDE.md          # Multi-LLM setup & provider configuration guide
     └── MEDICAL_DOCUMENT_INTELLIGENCE.md # Document intelligence & OCR processing guide
 ```

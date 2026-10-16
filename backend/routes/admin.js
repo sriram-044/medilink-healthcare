@@ -30,8 +30,8 @@ router.post('/users', auth, role('admin'), async (req, res, next) => {
   }
 });
 
-// GET /api/admin/users — get all users (admin can filter; lab can read patients/doctors)
-router.get('/users', auth, role('admin', 'lab'), async (req, res, next) => {
+// GET /api/admin/users — get all users (admin can filter; lab/hospital can read patients/doctors)
+router.get('/users', auth, role('admin', 'lab', 'hospital'), async (req, res, next) => {
   try {
     const { role: filterRole, search } = req.query;
     const query = filterRole ? { role: filterRole } : {};
@@ -67,7 +67,7 @@ router.get('/users', auth, role('admin', 'lab'), async (req, res, next) => {
 });
 
 // PUT /api/admin/assign — assign doctor to patient
-router.put('/assign', auth, role('admin'), async (req, res, next) => {
+router.put('/assign', auth, role('admin', 'hospital'), async (req, res, next) => {
   try {
     const { patientId, doctorId } = req.body;
     await User.findByIdAndUpdate(patientId, { assignedDoctor: doctorId });
@@ -101,7 +101,7 @@ router.put('/users/:id', auth, role('admin'), async (req, res, next) => {
 });
 
 // GET /api/admin/analytics — system analytics
-router.get('/analytics', auth, role('admin'), async (req, res, next) => {
+router.get('/analytics', auth, role('admin', 'hospital'), async (req, res, next) => {
   try {
     const totalPatients = await User.countDocuments({ role: 'patient' });
     const totalDoctors = await User.countDocuments({ role: 'doctor' });

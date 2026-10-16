@@ -8,7 +8,7 @@ const { parsePagination, formatPaginatedResponse } = require('../utils/paginatio
 const { BadRequestError, NotFoundError } = require('../utils/errors');
 
 // GET /api/pharmacy/prescriptions — view all prescriptions
-router.get('/prescriptions', auth, role('pharmacy', 'admin', 'doctor'), async (req, res, next) => {
+router.get('/prescriptions', auth, role('pharmacy', 'admin', 'doctor', 'hospital'), async (req, res, next) => {
   try {
     const { patientId, doctorId, isActive, search, startDate, endDate } = req.query;
     const query = {};

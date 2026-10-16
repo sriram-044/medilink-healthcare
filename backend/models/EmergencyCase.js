@@ -144,8 +144,13 @@ const EmergencyCaseSchema = new mongoose.Schema({
     latitude: { type: Number, default: null },
     longitude: { type: Number, default: null },
     accuracy: { type: Number, default: null },
+    accuracyMeters: { type: Number, default: null },
     timestamp: { type: Date, default: null },
+    capturedAt: { type: Date, default: null },
+    source: { type: String, enum: ['gps', 'manual', 'network', 'profile_fallback', 'unknown', null], default: null },
+    consentStatus: { type: String, enum: ['granted', 'denied', 'manual', null], default: null },
     address: { type: String, default: null },
+    mapsUrl: { type: String, default: null },
     isAvailable: { type: Boolean, default: false }
   },
   emergencyContacts: [{

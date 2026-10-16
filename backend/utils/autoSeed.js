@@ -35,6 +35,12 @@ const seed = async () => {
       role: 'admin', phone: '+91 98765 43210', isActive: true
     }).save();
 
+    // 1b. Hospital Operations User
+    await new User({
+      name: 'City General Hospital (Operations)', email: 'hospital@demo.com', password,
+      role: 'hospital', department: 'Hospital Administration', phone: '+91 98765 43219', isActive: true
+    }).save();
+
     // 2. Doctor User
     const doctor = await new User({
       name: 'Dr. Priya Sharma', email: 'doctor@demo.com', password,
@@ -680,11 +686,12 @@ const seed = async () => {
     console.log('  1. 👤 Patient (Elderly): ravi@demo.com     / demo123 (Mr. Ravi)');
     console.log('  2. 👤 Patient (Standard): patient@demo.com  / demo123 (Rajan Kumar)');
     console.log('  3. 👨‍⚕️ Doctor:             doctor@demo.com   / demo123 (Dr. Priya Sharma)');
-    console.log('  4. 🏥 Hospital / Admin:  admin@demo.com    / demo123 (Super Admin)');
-    console.log('  5. 🧪 Lab Staff:         lab@demo.com      / demo123 (John Doe)');
-    console.log('  6. 💊 Pharmacist:        pharmacy@demo.com / demo123 (Anita Patel)');
-    console.log('  7. 🛡️ Insurance Officer: insurance@demo.com/ demo123 (Rakesh Mehta)');
-    console.log('  8. 🚑 Emergency Response: emergency@demo.com/ demo123 (Vikram Singh)');
+    console.log('  4. 🏥 Hospital:          hospital@demo.com / demo123 (Hospital Operations)');
+    console.log('  5. ⚙️ Admin:             admin@demo.com    / demo123 (Super Admin)');
+    console.log('  6. 🧪 Lab Staff:         lab@demo.com      / demo123 (John Doe)');
+    console.log('  7. 💊 Pharmacist:        pharmacy@demo.com / demo123 (Anita Patel)');
+    console.log('  8. 🛡️ Insurance Officer: insurance@demo.com/ demo123 (Rakesh Mehta)');
+    console.log('  9. 🚑 Emergency Response: emergency@demo.com/ demo123 (Vikram Singh)');
     console.log('');
 
   } catch (err) {

@@ -11,8 +11,8 @@ const { escapeRegex } = require('../utils/queryHelper');
 const { parsePagination, formatPaginatedResponse } = require('../utils/paginationHelper');
 const { BadRequestError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
-// GET /api/patients — all patients (doctor/admin)
-router.get('/', auth, role('doctor', 'admin'), async (req, res, next) => {
+// GET /api/patients — all patients (doctor/admin/hospital)
+router.get('/', auth, role('doctor', 'admin', 'hospital'), async (req, res, next) => {
   try {
     const { search } = req.query;
     const query = { role: 'patient' };
@@ -42,7 +42,7 @@ router.get('/', auth, role('doctor', 'admin'), async (req, res, next) => {
       .skip(pagination.skip)
       .limit(pagination.limit);
 
-    if (req.user.role === 'admin') {
+    if (req.user.role === 'admin' || req.user.role === 'hospital') {
       patientsQuery = patientsQuery.populate('assignedDoctor', 'name email specialization');
     }
 
@@ -52,6 +52,128 @@ router.get('/', auth, role('doctor', 'admin'), async (req, res, next) => {
     ]);
 
     res.json(formatPaginatedResponse(patients, total, pagination.page, pagination.limit));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Patient GPS & Location Endpoints ──────────────────────────────────────────
+
+// PUT /api/patients/me/location — Patient updates their own GPS or manual location
+const handlePatientLocationUpdate = async (req, res, next) => {
+  try {
+    const { latitude, longitude, accuracyMeters, address, source = 'gps', consentStatus = 'granted' } = req.body;
+
+    let lat = null;
+    let lng = null;
+
+    if (latitude !== undefined && latitude !== null) {
+      lat = Number(latitude);
+      if (isNaN(lat) || lat < -90 || lat > 90) {
+        return next(new BadRequestError('Invalid latitude. Value must be a number between -90 and 90.'));
+      }
+    }
+
+    if (longitude !== undefined && longitude !== null) {
+      lng = Number(longitude);
+      if (isNaN(lng) || lng < -180 || lng > 180) {
+        return next(new BadRequestError('Invalid longitude. Value must be a number between -180 and 180.'));
+      }
+    }
+
+    if (source && !['gps', 'manual', 'network'].includes(source)) {
+      return next(new BadRequestError("Invalid source. Allowed values: 'gps', 'manual', 'network'."));
+    }
+
+    if (consentStatus && !['granted', 'denied', 'manual'].includes(consentStatus)) {
+      return next(new BadRequestError("Invalid consentStatus. Allowed values: 'granted', 'denied', 'manual'."));
+    }
+
+    // Always use authenticated user's ID to prevent IDOR attacks
+    const patient = await User.findById(req.user._id);
+    if (!patient) return next(new NotFoundError('Patient account not found'));
+
+    patient.location = {
+      latitude: lat,
+      longitude: lng,
+      accuracyMeters: accuracyMeters !== undefined && accuracyMeters !== null ? Math.round(Number(accuracyMeters)) : null,
+      address: address ? String(address).trim() : (lat && lng ? `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}` : patient.roomLocation || null),
+      capturedAt: new Date(),
+      source,
+      consentStatus
+    };
+
+    await patient.save();
+
+    res.json({
+      success: true,
+      message: 'Location updated successfully',
+      location: patient.location
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.put('/me/location', auth, handlePatientLocationUpdate);
+router.post('/me/location', auth, handlePatientLocationUpdate);
+
+// GET /api/patients/me/location — Retrieve current authenticated patient's location
+router.get('/me/location', auth, async (req, res, next) => {
+  try {
+    const patient = await User.findById(req.user._id).select('location name role roomLocation');
+    if (!patient) return next(new NotFoundError('Patient account not found'));
+
+    res.json({
+      success: true,
+      location: patient.location || {
+        latitude: null,
+        longitude: null,
+        accuracyMeters: null,
+        address: patient.roomLocation || null,
+        source: null,
+        consentStatus: null
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/patients/:id/location — Authorized access to patient location
+router.get('/:id/location', auth, async (req, res, next) => {
+  try {
+    const targetPatientId = req.params.id;
+
+    // RBAC: Patient can only view their own location
+    if (req.user.role === 'patient' && req.user._id.toString() !== targetPatientId) {
+      return next(new ForbiddenError('Access denied. You cannot view another patient\'s private location.'));
+    }
+
+    const patient = await User.findById(targetPatientId).select('name location assignedDoctor roomLocation');
+    if (!patient) return next(new NotFoundError('Patient not found'));
+
+    // If doctor, must be assigned
+    if (req.user.role === 'doctor') {
+      const isAssigned = patient.assignedDoctor && patient.assignedDoctor.toString() === req.user._id.toString();
+      if (!isAssigned) {
+        return next(new ForbiddenError('Access denied. You are not assigned to this patient.'));
+      }
+    }
+
+    res.json({
+      success: true,
+      patientId: patient._id,
+      patientName: patient.name,
+      location: patient.location || {
+        latitude: null,
+        longitude: null,
+        accuracyMeters: null,
+        address: patient.roomLocation || null,
+        source: null,
+        consentStatus: null
+      }
+    });
   } catch (err) {
     next(err);
   }

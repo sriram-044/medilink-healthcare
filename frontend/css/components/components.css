@@ -1,0 +1,5 @@
+/* Reusable UI Components Stylesheet (Modals, Badges, Buttons, Cards) */
+.btn-primary { background: var(--primary, #00d4aa); color: #080c14; }
+.badge-warning { background: rgba(255, 179, 0, 0.15); color: #ffb300; }
+.badge-danger { background: rgba(255, 77, 106, 0.15); color: #ff4d6a; }
+.badge-success { background: rgba(0, 212, 170, 0.15); color: #00d4aa; }

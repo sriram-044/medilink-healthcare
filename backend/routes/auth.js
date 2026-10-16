@@ -11,7 +11,7 @@ const registerValidation = [
   body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }),
   body('email').isEmail().normalizeEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['patient', 'doctor', 'admin', 'lab']).withMessage('Invalid role')
+  body('role').isIn(['patient', 'doctor', 'admin', 'lab', 'hospital']).withMessage('Invalid role')
 ];
 
 const loginValidation = [

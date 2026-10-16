@@ -9,13 +9,37 @@ The MediLink AI backend is an enterprise Node.js and Express.js REST API with in
 ```
 backend/
 │
-├── cert/                     # SSL/TLS certificates for HTTPS termination
-│   └── cert.crt
+├── server.js                 # Application bootstrap and server entry point
 │
 ├── config/                   # System configuration & environment guards
 │   ├── db.js                 # MongoDB connection manager (Atlas & in-memory fallback)
 │   ├── env.js                # Production secrets validator, entropy checker & sanitization
 │   └── passport.js           # Google OAuth 2.0 Passport strategy
+│
+├── routes/                   # Express HTTP API routes
+│   ├── auth.js               # Registration, login, logout, /api/auth/me
+│   ├── patients.js           # Patient records, allergies, Lifetime EHR history
+│   ├── vitals.js             # Telemetric vitals ingestion
+│   ├── doctors.js            # Doctor dashboard and patient assignments
+│   ├── hospitals.js          # Nearby hospital locator & trauma status
+│   ├── emergency.js          # Complete SOS emergency dispatch and lifecycle
+│   ├── lab.js                # Laboratory test orders, samples, barcode generation
+│   ├── pharmacy.js           # Medication orders and dispensing
+│   ├── insurance.js          # Insurance claim lifecycle
+│   └── ai.js                 # Clinical AI assistant queries
+│
+├── controllers/              # Modular request handlers
+│   ├── authController.js
+│   ├── patientController.js
+│   ├── emergencyController.js
+│   └── index.js
+│
+├── services/                 # Business logic and integrations
+│   ├── emergency/            # Dispatch, SOS lifecycle, SMS notifications
+│   ├── wearable/             # Telemetry drift simulation, critical threshold detection
+│   ├── notifications/        # Cross-portal notification dispatcher
+│   ├── hospitals/            # Geospatial haversine calculation & hospital routing
+│   └── ai/                   # Multi-LLM provider, RAG, and NLP engines
 │
 ├── middleware/               # HTTP middleware pipeline
 │   ├── auth.js               # JWT verification (HttpOnly cookie & Bearer token fallback)
@@ -37,45 +61,21 @@ backend/
 │   ├── User.js               # System accounts & emergency contacts
 │   └── VitalSigns.js         # Telemetric sensor time-series data
 │
-├── routes/                   # Express route definitions
-│   ├── admin.js              # System analytics, user administration, audit logs
-│   ├── ai.js                 # Clinical AI assistant queries
-│   ├── alerts.js             # Biometric alerts CRUD
-│   ├── auth.js               # Registration, login, logout, /api/auth/me
-│   ├── emergency.js          # Complete SOS emergency dispatch and lifecycle
-│   ├── googleAuth.js         # OAuth redirect and callback routes
-│   ├── insurance.js          # Insurance claim lifecycle
-│   ├── lab.js                # Laboratory test orders, samples, barcode generation
-│   ├── medicalReports.js     # Validated file uploads, secure streaming preview, EHR publish
-│   ├── medication.js         # Prescriptions and diet plans
-│   ├── patients.js           # Patient records, allergies, Lifetime EHR history
-│   ├── pharmacy.js           # Medication orders and dispensing
-│   ├── reports.js            # Legacy reports
-│   └── vitals.js             # Telemetric vitals ingestion
+├── validators/               # Input validation schemas & guards
+├── sockets/                  # Socket.IO handlers
+├── jobs/                     # Scheduled cron jobs (node-cron)
+├── utils/                    # Shared backend utilities
 │
-├── utils/                    # Business logic, services & helper modules
-│   ├── ai/                   # Modular LLM & RAG architecture
-│   ├── aiEngine.js           # Vitals anomaly detection engine
-│   ├── autoSeed.js           # In-memory and development initial data seeder
-│   ├── criticalDetection.js  # Critical biometric threshold evaluator
-│   ├── documentIntelligence.js # PDF & text extraction for reports
-│   ├── emergencyCommunicationService.js # SMS and push dispatcher
-│   ├── emergencyEngine.js    # Multi-party emergency alert coordinator
-│   ├── emergencySosService.js # SOS service & vitals anomaly evaluator
-│   ├── errors.js             # Custom operational error classes
-│   ├── fileValidator.js      # Magic-byte and MIME file security
-│   ├── notificationService.js # Cross-portal notification dispatcher
-│   ├── paginationHelper.js   # Production-safe pagination parser
-│   ├── queryHelper.js        # Sanitized MongoDB search & date builder
-│   ├── reportAiEngine.js     # Report AI analysis generator
-│   ├── scheduler.js          # Background cron jobs (node-cron)
-│   ├── socket.js             # Socket.IO WebSocket gateway
-│   └── storageService.js     # Local protected file storage manager
+├── tests/                    # Categorized test suites
+│   ├── unit/                 # Isolated module & logic unit tests
+│   ├── integration/          # HTTP API & route integration tests
+│   ├── security/             # CSP, IDOR, secrets, input security tests
+│   ├── regression/           # Full system quality gate & regression suites
+│   └── run_all_tests.js      # Categorized test runner
 │
 ├── uploads/                  # Protected medical report storage
 │   └── temp/                 # Temporary staging folder
 │
-├── server.js                 # Application bootstrap and server entry point
 ├── package.json              # Dependencies and scripts
 ├── package-lock.json
 ├── Dockerfile                # Production container definition

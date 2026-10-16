@@ -1,0 +1,6 @@
+/* Page-specific layout overrides and animations */
+.portal-page-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

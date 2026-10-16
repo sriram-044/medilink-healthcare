@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Signing you in...</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-base);
+      flex-direction: column;
+      gap: 20px;
+    }
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 4px solid rgba(0,212,170,0.15);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .auth-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      font-family: var(--font-display);
+    }
+    .auth-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <div class="auth-title">Signing you in with Google...</div>
+  <div class="auth-sub" id="authStatus">Please wait a moment ✨</div>
+
+  <script src="js/auth/auth-success.js"></script>
+</body>
+</html>

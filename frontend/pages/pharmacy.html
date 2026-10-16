@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Pharmacy Portal</title>
+  <meta name="description" content="CareLink Pharmacy Portal: Electronic prescriptions, dosage dispensing, and medicine inventory." />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">💊</div>
+        <div>
+          <div class="logo-text">MediLink AI</div>
+          <div class="logo-subtitle">Pharmacy Portal</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Main</div>
+        <a class="nav-item active" href="#">
+          <span class="nav-icon">💊</span> E-Prescriptions Queue
+        </a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">P</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebarName">Pharmacist</div>
+          <div class="user-role">pharmacy</div>
+        </div>
+        <button class="logout-btn" onclick="logout()" title="Logout">⏻</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">💊 Pharmacy Orders & Dispensing</div>
+          <div class="topbar-subtitle">Electronic prescriptions queue from attending doctors</div>
+        </div>
+      </div>
+
+      <div class="page-content">
+        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--primary),var(--secondary));">
+            <div class="stat-icon">💊</div>
+            <div class="stat-value" id="statTotalMeds">0</div>
+            <div class="stat-label">Total Prescriptions</div>
+          </div>
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--status-normal),#00b894);">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" id="statDispensed" style="color:var(--status-normal)">0</div>
+            <div class="stat-label">Dispensed Today</div>
+          </div>
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,var(--warning),#e17055);">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-value" id="statPending" style="color:var(--warning)">0</div>
+            <div class="stat-label">Pending Dispense</div>
+          </div>
+          <div class="stat-card" style="--card-accent:linear-gradient(90deg,#ff6b9d,#e84393);">
+            <div class="stat-icon">📦</div>
+            <div class="stat-value" style="color:#ff6b9d">Optimal</div>
+            <div class="stat-label">Inventory Status</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">💊 Electronic Prescriptions Queue</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadPharmacyPrescriptions()">↻ Refresh Queue</button>
+          </div>
+          <div id="prescriptionsList" style="display:flex; flex-direction:column; gap:14px;">
+            <div class="loading-spinner"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <link rel="stylesheet" href="components/carelink-ai/ai-chat.css" />
+  <script src="components/carelink-ai/ai-config.js"></script>
+  <script src="components/carelink-ai/ai-chat.js"></script>
+  <script src="js/auth/auth.js"></script>
+  <script src="js/pharmacy/pharmacy.js"></script>
+</body>
+</html>

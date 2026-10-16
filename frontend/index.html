@@ -268,10 +268,10 @@
       <div class="hero-features">
         <div class="hero-feature"><div class="hero-feature-dot"></div>AI Risk Scoring Engine (0–100 scale)</div>
         <div class="hero-feature"><div class="hero-feature-dot"></div>Real-time vitals monitoring with Chart.js</div>
-        <div class="hero-feature"><div class="hero-feature-dot"></div>4 role-based portals: Patient, Doctor, Admin, Lab</div>
+        <div class="hero-feature"><div class="hero-feature-dot"></div>4 Primary Portals: Patient, Doctor, Hospital, Admin</div>
+        <div class="hero-feature"><div class="hero-feature-dot"></div>Integrated Modules: Laboratory, Pharmacy & Insurance</div>
         <div class="hero-feature"><div class="hero-feature-dot"></div>Automated alerts for Critical & Risk vitals</div>
-        <div class="hero-feature"><div class="hero-feature-dot"></div>Lab report 3-role workflow with file upload</div>
-        <div class="hero-feature"><div class="hero-feature-dot"></div>One-click SOS emergency button</div>
+        <div class="hero-feature"><div class="hero-feature-dot"></div>One-click SOS Emergency Fast-Track Entry</div>
       </div>
 
       <div class="floating-card" style="bottom:80px;right:40px;">
@@ -288,36 +288,38 @@
         <div class="login-form-subtitle">Sign in to your CareLink portal</div>
       </div>
 
-      <!-- Role Selector (8 Portals Ecosystem) -->
+      <!-- Emergency / SOS Fast-Track Entry Point -->
+      <div class="emergency-fast-track" style="margin-bottom: 20px; padding: 12px 16px; background: rgba(255, 71, 87, 0.1); border: 1.5px solid rgba(255, 71, 87, 0.35); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 24px;">🚨</span>
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--danger);">Emergency / SOS Fast-Track</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Direct emergency dispatch & incident command</div>
+          </div>
+        </div>
+        <a href="emergency.html" class="btn btn-danger btn-sm" style="text-decoration: none; font-weight: 700; white-space: nowrap; padding: 6px 12px;">
+          🚑 Fast-Track SOS ↗
+        </a>
+      </div>
+
+      <!-- Four Primary Portals Selector -->
       <div class="role-selector" style="grid-template-columns: repeat(4, 1fr); gap: 8px;">
-        <button class="role-btn selected" data-role="patient" onclick="selectRole('patient', this)">
+        <button type="button" class="role-btn selected" data-role="patient">
           <span class="role-emoji">👤</span> Patient
         </button>
-        <button class="role-btn" data-role="doctor" onclick="selectRole('doctor', this)">
+        <button type="button" class="role-btn" data-role="doctor">
           <span class="role-emoji">👨‍⚕️</span> Doctor
         </button>
-        <button class="role-btn" data-role="hospital" onclick="selectRole('hospital', this)">
+        <button type="button" class="role-btn" data-role="hospital">
           <span class="role-emoji">🏥</span> Hospital
         </button>
-        <button class="role-btn" data-role="lab" onclick="selectRole('lab', this)">
-          <span class="role-emoji">🧪</span> Lab
-        </button>
-        <button class="role-btn" data-role="pharmacy" onclick="selectRole('pharmacy', this)">
-          <span class="role-emoji">💊</span> Pharmacy
-        </button>
-        <button class="role-btn" data-role="insurance" onclick="selectRole('insurance', this)">
-          <span class="role-emoji">🛡️</span> Insurance
-        </button>
-        <button class="role-btn" data-role="emergency" onclick="selectRole('emergency', this)">
-          <span class="role-emoji">🚑</span> Emergency
-        </button>
-        <button class="role-btn" data-role="admin" onclick="selectRole('admin', this)">
+        <button type="button" class="role-btn" data-role="admin">
           <span class="role-emoji">⚙️</span> Admin
         </button>
       </div>
 
       <!-- Form -->
-      <form id="loginForm" onsubmit="handleLogin(event)">
+      <form id="loginForm">
         <div class="form-group">
           <label class="form-label">Email Address</label>
           <input type="email" id="loginEmail" class="form-input" placeholder="Enter your email" required autocomplete="email" />
@@ -333,7 +335,7 @@
 
       <div class="login-divider">or continue with</div>
 
-      <a id="googleSignInBtn" class="btn-google" onclick="googleLogin()" style="cursor:pointer">
+      <a id="googleSignInBtn" class="btn-google" style="cursor:pointer">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
           <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -344,19 +346,20 @@
       </a>
 
       <div class="demo-creds" style="font-size: 11px; line-height: 1.6;">
-        <div style="font-weight:700;margin-bottom:4px;color:var(--text-primary);">🎯 8-Portal Ecosystem Credentials (Password: demo123)</div>
+        <div style="font-weight:700;margin-bottom:4px;color:var(--text-primary);">🎯 Four Primary Portals (Password: demo123)</div>
         <div>👤 <strong>Patient:</strong> ravi@demo.com | 👨‍⚕️ <strong>Doctor:</strong> doctor@demo.com</div>
-        <div>🏥 <strong>Hospital / Admin:</strong> admin@demo.com | 🧪 <strong>Lab:</strong> lab@demo.com</div>
-        <div>💊 <strong>Pharmacy:</strong> pharmacy@demo.com | 🛡️ <strong>Insurance:</strong> insurance@demo.com</div>
-        <div>🚑 <strong>Emergency:</strong> emergency@demo.com</div>
+        <div>🏥 <strong>Hospital:</strong> hospital@demo.com | ⚙️ <strong>Admin:</strong> admin@demo.com</div>
+        <div style="margin-top:4px;color:var(--text-muted);border-top:1px dashed rgba(0,212,170,0.2);padding-top:4px;">
+          🔬 <em>Integrated Services (Lab, Pharmacy & Insurance) are coordinated inside the Hospital & Doctor portals. Direct logins: lab@demo.com, pharmacy@demo.com, insurance@demo.com.</em>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="js/auth.js"></script>
-  <script src="js/index.js"></script>
+  <script src="js/auth/auth.js"></script>
+  <script src="js/auth/index.js"></script>
 </body>
 </html>
 

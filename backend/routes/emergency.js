@@ -240,12 +240,48 @@ router.get('/cases/:id/incident-log', auth, async (req, res, next) => {
  */
 router.post('/cases/:id/location', auth, async (req, res, next) => {
   try {
-    const { latitude, longitude, accuracy, address } = req.body;
+    const { latitude, longitude, accuracy, accuracyMeters, address, source, consentStatus } = req.body;
+
+    if (latitude !== undefined && latitude !== null) {
+      const lat = Number(latitude);
+      if (isNaN(lat) || lat < -90 || lat > 90) {
+        return next(new BadRequestError('Invalid latitude. Must be a valid number between -90 and 90.'));
+      }
+    }
+
+    if (longitude !== undefined && longitude !== null) {
+      const lng = Number(longitude);
+      if (isNaN(lng) || lng < -180 || lng > 180) {
+        return next(new BadRequestError('Invalid longitude. Must be a valid number between -180 and 180.'));
+      }
+    }
+
+    const targetCase = await EmergencyCase.findById(req.params.id);
+    if (!targetCase) {
+      return res.status(404).json({ message: 'Emergency case not found' });
+    }
+
+    // Authorization: only the patient who opened the case or authorized emergency/medical staff
+    const isOwner = req.user._id.toString() === targetCase.patientId.toString();
+    const isAuthorizedStaff = ['emergency', 'doctor', 'hospital', 'admin'].includes(req.user.role);
+    if (!isOwner && !isAuthorizedStaff) {
+      return res.status(403).json({ message: 'Forbidden. You are not authorized to update this emergency case location.' });
+    }
+
     const updatedCase = await emergencySosService.cases.updateLocation(
       req.params.id,
-      { latitude, longitude, accuracy, address },
+      {
+        latitude,
+        longitude,
+        accuracy: accuracyMeters || accuracy,
+        accuracyMeters: accuracyMeters || accuracy,
+        address,
+        source: source || 'gps',
+        consentStatus: consentStatus || 'granted'
+      },
       req.user
     );
+
     res.json({
       message: 'Location updated in emergency incident log',
       location: updatedCase.location

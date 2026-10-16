@@ -25,6 +25,15 @@ const UserSchema = new mongoose.Schema({
     isPrimary: { type: Boolean, default: false }
   }],
   roomLocation: { type: String, default: 'Home' },
+  location: {
+    latitude: { type: Number, default: null },
+    longitude: { type: Number, default: null },
+    accuracyMeters: { type: Number, default: null },
+    capturedAt: { type: Date, default: null },
+    source: { type: String, enum: ['gps', 'manual', 'network', null], default: null },
+    consentStatus: { type: String, enum: ['granted', 'denied', 'manual', null], default: null },
+    address: { type: String, default: null }
+  },
   medicalHistory: [{ type: String }],
   allergies: [{ type: String }],
   allergiesDetail: [{

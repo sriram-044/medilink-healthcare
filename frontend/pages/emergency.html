@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareLink — Emergency Response Command Portal</title>
+  <meta name="description" content="CareLink Emergency Response Portal: Live SOS stream, team dispatch, GPS telemetry, and incident management." />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">🚑</div>
+        <div>
+          <div class="logo-text">MediLink AI</div>
+          <div class="logo-subtitle">Emergency Command</div>
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Incident Command</div>
+        <a class="nav-item active" id="navActive" href="#" onclick="showSection('active', this)">
+          <span class="nav-icon">🚨</span> Active Emergencies
+          <span class="nav-badge" id="activeBadge" style="display:none">0</span>
+        </a>
+        <a class="nav-item" id="navCases" href="#" onclick="showSection('cases', this)">
+          <span class="nav-icon">📋</span> Emergency Cases
+        </a>
+        <a class="nav-item" id="navLocations" href="#" onclick="showSection('locations', this)">
+          <span class="nav-icon">🗺️</span> Emergency Locations
+        </a>
+        
+        <div class="nav-section-label">Operations</div>
+        <a class="nav-item" id="navTeams" href="#" onclick="showSection('teams', this)">
+          <span class="nav-icon">👥</span> Emergency Teams
+        </a>
+        <a class="nav-item" id="navHistory" href="#" onclick="showSection('history', this)">
+          <span class="nav-icon">📊</span> Emergency History
+        </a>
+        
+        <div class="nav-section-label">System</div>
+        <a class="nav-item" id="navNotifications" href="#" onclick="showSection('notifications', this)">
+          <span class="nav-icon">🔔</span> Notifications
+        </a>
+        <a class="nav-item" id="navSettings" href="#" onclick="showSection('settings', this)">
+          <span class="nav-icon">⚙️</span> Settings
+        </a>
+      </nav>
+      
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">E</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebarName">ER Command Officer</div>
+          <div class="user-role" id="sidebarRole">emergency</div>
+        </div>
+        <button class="logout-btn" onclick="logout()" title="Logout">⏻</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      
+      <!-- TOPBAR -->
+      <div class="topbar">
+        <div>
+          <div class="topbar-title" id="pageTitle">🚨 Active Emergencies &amp; Dispatch</div>
+          <div class="topbar-subtitle" id="pageSubtitle">Real-time emergency incident feed &amp; response coordination</div>
+        </div>
+        <div class="topbar-right">
+          <div id="currentDateTime" style="font-size:13px; color:var(--text-muted);"></div>
+          <button class="btn btn-ghost btn-sm" onclick="refreshCurrentSection()">
+            ↻ Refresh Feed
+          </button>
+        </div>
+      </div>
+
+      <div class="page-content">
+        
+        <!-- ═══ 1. ACTIVE EMERGENCIES SECTION ═══ -->
+        <section id="section-active">
+          <!-- Real-Time Statistics Grid (4 Equally Sized Uniform Cards) -->
+          <div class="emergency-stats-grid">
+            <div class="emergency-stat-card" style="--accent-border: #ef4444; --icon-bg: rgba(239, 68, 68, 0.12); --icon-border: rgba(239, 68, 68, 0.25); --stat-color: #ef4444;">
+              <div class="emergency-stat-icon-wrap">🔴</div>
+              <div class="emergency-stat-info">
+                <div class="emergency-stat-number" id="statActiveCount">0</div>
+                <div class="emergency-stat-label">Active Emergencies</div>
+                <div class="emergency-stat-sub">Immediate response required</div>
+              </div>
+            </div>
+
+            <div class="emergency-stat-card" style="--accent-border: #f59e0b; --icon-bg: rgba(245, 158, 11, 0.12); --icon-border: rgba(245, 158, 11, 0.25); --stat-color: #fbbf24;">
+              <div class="emergency-stat-icon-wrap">🟠</div>
+              <div class="emergency-stat-info">
+                <div class="emergency-stat-number" id="statPendingCount">0</div>
+                <div class="emergency-stat-label">Pending Response</div>
+                <div class="emergency-stat-sub">Triage queue &amp; dispatching</div>
+              </div>
+            </div>
+
+            <div class="emergency-stat-card" style="--accent-border: #6366f1; --icon-bg: rgba(99, 102, 241, 0.12); --icon-border: rgba(99, 102, 241, 0.25); --stat-color: #818cf8;">
+              <div class="emergency-stat-icon-wrap">🟡</div>
+              <div class="emergency-stat-info">
+                <div class="emergency-stat-number" id="statAssignedCount">0</div>
+                <div class="emergency-stat-label">Teams Assigned</div>
+                <div class="emergency-stat-sub">Units en route or on scene</div>
+              </div>
+            </div>
+
+            <div class="emergency-stat-card" style="--accent-border: #00d4aa; --icon-bg: rgba(0, 212, 170, 0.12); --icon-border: rgba(0, 212, 170, 0.25); --stat-color: #00d4aa;">
+              <div class="emergency-stat-icon-wrap">🟢</div>
+              <div class="emergency-stat-info">
+                <div class="emergency-stat-number" id="statResolvedCount">0</div>
+                <div class="emergency-stat-label">Resolved Today</div>
+                <div class="emergency-stat-sub">Successful handoffs &amp; clears</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ EMERGENCY COMMAND 2-COLUMN DASHBOARD ═══ -->
+          <div class="emergency-command-grid">
+            
+            <!-- LEFT COLUMN: MAIN INCIDENT CAD COMMAND CONSOLE -->
+            <div class="cad-panel" id="cadMainPanel">
+              <!-- Area A: INCIDENT SUMMARY -->
+              <div class="cad-header">
+                <div class="cad-incident-identity">
+                  <div class="cad-incident-icon">🚨</div>
+                  <div>
+                    <div class="cad-title-row">
+                      <span class="cad-incident-title" id="cadIncidentId">Incident #EMG-2026-8812</span>
+                      <span class="priority-indicator-critical" id="cadPriorityBadge">High Priority Cardiac</span>
+                      <span class="badge" id="cadStatusBadge" style="background:rgba(239,68,68,0.2);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.3);">● EN ROUTE</span>
+                    </div>
+                    <div class="cad-meta-row" id="cadPatientDetails">
+                      <span>Patient: <strong id="cadPatientName" style="color:#fff;">Mr. Ravi</strong> (<span id="cadPatientDemographics">68M, B+</span>)</span>
+                      <span>•</span>
+                      <span>📍 <span id="cadLocationText">12 Gandhi St, T. Nagar, Chennai</span></span>
+                      <span>•</span>
+                      <span>Triggered: <span id="cadTriggerTime" style="color:#f59e0b;font-weight:600;">13:14:02 IST</span></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="cad-header-metrics">
+                  <span class="badge" id="cadAiTriageBadge" style="background:rgba(0,212,170,0.15);color:var(--primary);font-weight:700;border:1px solid rgba(0,212,170,0.3);padding:6px 12px;font-size:12px;">
+                    🤖 AI Triage: 92% Confidence
+                  </span>
+                  <span class="badge" id="cadEtaBadge" style="background:rgba(245,158,11,0.15);color:#fbbf24;font-weight:700;border:1px solid rgba(245,158,11,0.3);padding:6px 12px;font-size:12px;">
+                    ⏱️ ETA: 8 Mins
+                  </span>
+                </div>
+              </div>
+
+              <!-- Area B: LOCATION & VITALS (Left) + Area C: RESPONSE WORKFLOW & Area D: DESTINATION HOSPITALS (Right) -->
+              <div class="cad-body-grid">
+                
+                <!-- Left Sub-Column: Location Map & Vitals Grid -->
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                  <!-- Dedicated GIS Location Map -->
+                  <div class="cad-map-container" id="cadGisMapBox">
+                    <div class="cad-map-overlay"></div>
+                    <div class="cad-map-radar"></div>
+
+                    <!-- Map Top Status Bar -->
+                    <div class="cad-map-bar-top">
+                      <span class="badge" style="background:rgba(11,18,32,0.88);color:var(--primary);font-size:11px;border:1px solid rgba(0,212,170,0.3);display:inline-flex;align-items:center;gap:6px;">
+                        🛰️ <span id="cadGisTelemetryLabel">Chennai GIS Telemetry (GPS Fix: ±4m)</span>
+                      </span>
+                      <span class="badge" style="background:#ef4444;color:#fff;font-size:11px;font-weight:800;letter-spacing:0.5px;box-shadow:0 0 12px rgba(239,68,68,0.6);">
+                        ● LIVE TRACKING
+                      </span>
+                    </div>
+
+                    <!-- Simulated Route Vector Path -->
+                    <svg style="position:absolute;inset:0;width:100%;height:100%;z-index:1;" preserveAspectRatio="none">
+                      <path d="M 60 170 Q 180 130 260 90 T 420 50" fill="none" stroke="#00d2b4" stroke-width="3" stroke-dasharray="6,4" opacity="0.85" />
+                    </svg>
+
+                    <!-- Patient Incident Location Marker Pin -->
+                    <div style="position:absolute;top:40px;right:60px;z-index:2;display:flex;flex-direction:column;align-items:center;">
+                      <div style="width:20px;height:20px;border-radius:50%;background:#ef4444;border:2.5px solid #fff;box-shadow:0 0 16px #ef4444;animation:pulse-ring 2s infinite;"></div>
+                      <span style="font-size:10.5px;font-weight:700;color:#fff;background:rgba(0,0,0,0.8);padding:2px 8px;border-radius:4px;margin-top:4px;white-space:nowrap;border:1px solid rgba(255,255,255,0.1);">📍 Patient Incident Point</span>
+                    </div>
+
+                    <!-- Ambulance Unit Marker Pin -->
+                    <div style="position:absolute;bottom:42px;left:50px;z-index:2;display:flex;flex-direction:column;align-items:center;">
+                      <div style="background:#00d2b4;color:#050912;font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:6px;box-shadow:0 0 16px rgba(0,210,180,0.7);display:flex;align-items:center;gap:4px;">
+                        🚑 Ambulance #A-12
+                      </div>
+                      <span style="font-size:10px;color:#cbd5e1;background:rgba(0,0,0,0.8);padding:2px 6px;border-radius:4px;margin-top:3px;border:1px solid rgba(255,255,255,0.08);">42 km/h • 2.8 km away</span>
+                    </div>
+
+                    <!-- Map Bottom Telemetry Bar -->
+                    <div class="cad-map-bar-bottom">
+                      <span id="cadGisCoordsText">📍 Lat: 13.0418° N, Lon: 80.2341° E</span>
+                      <span id="cadGisRouteText">Route: Mount Road ➔ T. Nagar</span>
+                      <span style="color:#10b981;font-weight:600;">Traffic: Clear Fast-Track</span>
+                    </div>
+                  </div>
+
+                  <!-- Vital-Sign Cards in a Responsive Grid (Uncompressed, Clear Values) -->
+                  <div class="cad-vitals-grid">
+                    <div class="cad-vital-box danger" id="cadBoxHR">
+                      <div class="cad-vital-icon">💓</div>
+                      <div class="cad-vital-value-wrap">
+                        <span class="cad-vital-value" id="cadVitalHR" style="color:#ff6b6b;">145</span>
+                        <span class="cad-vital-unit">bpm</span>
+                      </div>
+                      <div class="cad-vital-label">Heart Rate (Tachycardia)</div>
+                    </div>
+
+                    <div class="cad-vital-box danger" id="cadBoxSpO2">
+                      <div class="cad-vital-icon">🫁</div>
+                      <div class="cad-vital-value-wrap">
+                        <span class="cad-vital-value" id="cadVitalSpO2" style="color:#38bdf8;">88%</span>
+                        <span class="cad-vital-unit">SpO2</span>
+                      </div>
+                      <div class="cad-vital-label">Oxygen (Hypoxia)</div>
+                    </div>
+
+                    <div class="cad-vital-box warning" id="cadBoxTemp">
+                      <div class="cad-vital-icon">🌡️</div>
+                      <div class="cad-vital-value-wrap">
+                        <span class="cad-vital-value" id="cadVitalTemp" style="color:#fbbf24;">101.2°</span>
+                        <span class="cad-vital-unit">F</span>
+                      </div>
+                      <div class="cad-vital-label">Temperature (Fever)</div>
+                    </div>
+
+                    <div class="cad-vital-box danger" id="cadBoxBP">
+                      <div class="cad-vital-icon">🩸</div>
+                      <div class="cad-vital-value-wrap">
+                        <span class="cad-vital-value" id="cadVitalBP" style="color:#c084fc;">165/102</span>
+                        <span class="cad-vital-unit">mmHg</span>
+                      </div>
+                      <div class="cad-vital-label">Blood Pressure</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right Sub-Column: Response Workflow & Destination Hospitals -->
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                  <!-- Area C: RESPONSE WORKFLOW -->
+                  <div class="cad-stepper-box">
+                    <div class="cad-stepper-title">
+                      <span>🔄 Response Workflow Lifecycle</span>
+                      <span class="badge" style="background:rgba(0,212,170,0.15);color:var(--primary);font-size:11px;margin-left:auto;">STAGE 4 OF 5</span>
+                    </div>
+                    <div class="cad-stepper-list">
+                      <div class="cad-stepper-step completed">
+                        <span class="cad-step-dot">✓</span>
+                        <div>
+                          <strong style="color:#fff;">1. Incident Triggered</strong>
+                          <div style="font-size:11px;color:var(--text-muted);">Wearable SOS &amp; Biometric Drop</div>
+                        </div>
+                        <span style="color:var(--text-muted);font-size:11px;margin-left:auto;font-family:monospace;">13:14:02 IST</span>
+                      </div>
+
+                      <div class="cad-stepper-step completed">
+                        <span class="cad-step-dot">✓</span>
+                        <div>
+                          <strong style="color:#fff;">2. AI Clinical Triage</strong>
+                          <div style="font-size:11px;color:#00d2b4;">92% Acute Cardiac Risk Confirmed</div>
+                        </div>
+                        <span style="color:#00d2b4;font-size:11px;margin-left:auto;font-weight:600;">Triaged ✓</span>
+                      </div>
+
+                      <div class="cad-stepper-step completed">
+                        <span class="cad-step-dot">✓</span>
+                        <div>
+                          <strong style="color:#fff;">3. Unit Dispatched</strong>
+                          <div style="font-size:11px;color:var(--text-muted);">Ambulance #A-12 (ALS Unit)</div>
+                        </div>
+                        <span style="color:var(--text-muted);font-size:11px;margin-left:auto;">Dispatched</span>
+                      </div>
+
+                      <div class="cad-stepper-step active">
+                        <span class="cad-step-dot">▶</span>
+                        <div>
+                          <strong style="color:#fbbf24;">4. En Route / Telemetry Stream</strong>
+                          <div style="font-size:11px;color:#fbbf24;">Live Biometric Stream Linked</div>
+                        </div>
+                        <span style="color:#fbbf24;font-size:11px;font-weight:700;margin-left:auto;">ETA: 8 Mins</span>
+                      </div>
+
+                      <div class="cad-stepper-step pending">
+                        <span class="cad-step-dot">5</span>
+                        <div>
+                          <span style="color:var(--text-secondary);font-weight:600;">5. ER Handoff &amp; ICU Admission</span>
+                          <div style="font-size:11px;color:var(--text-muted);">Apollo Trauma Bay #12 Reserved</div>
+                        </div>
+                        <span style="color:var(--text-muted);font-size:11px;margin-left:auto;">Pending</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Area D: DESTINATION HOSPITALS -->
+                  <div class="cad-hospitals-box">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                      <div style="font-size:13.5px;font-weight:700;color:#fff;">🏥 Destination Trauma Facilities</div>
+                      <span class="badge" style="background:rgba(59,130,246,0.15);color:#60a5fa;font-size:11px;">AUTO-ASSIGNED</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                      <div class="cad-hospital-item primary">
+                        <div>
+                          <strong style="color:#00d2b4;font-size:13px;">Apollo Hospitals Greams Rd</strong>
+                          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
+                            📍 2.4 km • ⏱️ 6 min drive • <strong>Trauma Level 1</strong>
+                          </div>
+                        </div>
+                        <span class="badge badge-normal" style="font-size:11px;font-weight:700;">
+                          ICU Bed #12 Reserved
+                        </span>
+                      </div>
+
+                      <div class="cad-hospital-item secondary">
+                        <div>
+                          <strong style="color:#e2e8f0;font-size:13px;">Sunrise Specialty Clinic</strong>
+                          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+                            📍 1.1 km • ⏱️ 3 min drive • Emergency Secondary
+                          </div>
+                        </div>
+                        <span class="badge" style="background:rgba(255,255,255,0.06);color:var(--text-secondary);font-size:11px;">
+                          Oxygen Bay Ready
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Rapid CAD Dispatcher Action Buttons -->
+                  <div class="cad-actions-row">
+                    <button class="btn btn-warning btn-sm" id="btnCadOptimizeRoute" onclick="showToast('🧭 CAD: Dynamic route optimized via Mount Road expressway. Avoided congestions.', 'info')">
+                      🧭 Optimize Route
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="btnCadRadioParamedic" onclick="showToast('📞 CAD: Radio channel linked to Capt. Rajesh Varma (Unit #A-12).', 'success')">
+                      📞 Radio Paramedic
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="btnCadConfirmHandoff" onclick="showToast('🏥 CAD: Apollo Greams Rd Emergency Desk alerted. ICU Bed #12 and Cath Lab ready.', 'success')">
+                      🏥 Confirm Handoff
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: REAL-TIME EMERGENCY STREAM (WIDE DEDICATED PANEL) -->
+            <div class="incident-feed-card">
+              <div class="incident-feed-header">
+                <div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div class="card-title" style="margin-bottom:0;">🚨 Real-Time Emergency Stream</div>
+                    <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:12px;">
+                      <span style="width:6px;height:6px;border-radius:50%;background:#ef4444;box-shadow:0 0 6px #ef4444;animation:pulse-ring 1.8s infinite;"></span>
+                      LIVE
+                    </span>
+                  </div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                    Live triage queue of manual SOS triggers, fall alerts, and biometric anomalies
+                  </div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="loadActiveEmergencies()" title="Reload active incidents feed">
+                  ↻ Refresh Feed
+                </button>
+              </div>
+
+              <!-- Live Incident Stream Container (Dynamic Queue) -->
+              <div id="activeIncidentsList" style="display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:850px;padding-right:2px;">
+                <div class="loading-spinner"></div>
+              </div>
+            </div>
+
+          </div><!-- /emergency-command-grid -->
+        </section>
+
+        <!-- ═══ 2. EMERGENCY CASES DIRECTORY ═══ -->
+        <section id="section-cases" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">📋 Emergency Cases Master Registry</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Filter and inspect all system emergency case records</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+              <input type="text" id="caseSearchInput" class="form-input" placeholder="Search by Emergency ID or Patient Name..." style="max-width:320px;" oninput="filterCases()" />
+              <select id="caseStatusFilter" class="form-select" style="width:auto;" onchange="filterCases()">
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+                <option value="TEAM_ASSIGNED">TEAM_ASSIGNED</option>
+                <option value="EN_ROUTE">EN_ROUTE</option>
+                <option value="ARRIVED">ARRIVED</option>
+                <option value="UNDER_CARE">UNDER_CARE</option>
+                <option value="RESOLVED">RESOLVED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
+              <select id="casePriorityFilter" class="form-select" style="width:auto;" onchange="filterCases()">
+                <option value="">All Priorities</option>
+                <option value="Critical">Critical</option>
+                <option value="High Priority">High Priority</option>
+                <option value="Warning">Warning</option>
+                <option value="Normal">Normal</option>
+              </select>
+            </div>
+
+            <div id="allCasesList" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 3. EMERGENCY LOCATIONS ═══ -->
+        <section id="section-locations" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">🗺️ Emergency Geolocation &amp; Dispatch Map Telemetry</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Coordinate mapping &amp; distance calculation for active incidents</div>
+              </div>
+            </div>
+
+            <div id="emergencyDispatchMap" style="height:360px; width:100%; border-radius:10px; margin-bottom:20px; border:1px solid rgba(255,255,255,0.08); background:#080c14; overflow:hidden;"></div>
+
+            <div id="locationsFeedContainer" style="display:flex; flex-direction:column; gap:16px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 4. EMERGENCY TEAMS ═══ -->
+        <section id="section-teams" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">👥 Emergency Response Teams Roster</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Rapid response vehicles, paramedics, and on-duty readiness</div>
+              </div>
+            </div>
+
+            <div id="teamsGridContainer" class="grid-2" style="gap:16px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 5. EMERGENCY HISTORY ═══ -->
+        <section id="section-history" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div>
+                <div class="card-title">📊 Emergency Incident Resolution History</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Archived incident timeline audits and resolution records</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="loadEmergencyHistory()">↻ Refresh</button>
+            </div>
+
+            <div id="historyIncidentsList" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 6. NOTIFICATIONS ═══ -->
+        <section id="section-notifications" class="hidden">
+          <div class="card mb-20">
+            <div class="card-header">
+              <div class="card-title">🔔 Emergency Dispatch Notifications</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadNotifications()">↻ Refresh</button>
+            </div>
+            <div id="erNotificationsList" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══ 7. SETTINGS ═══ -->
+        <section id="section-settings" class="hidden">
+          <div class="card mb-20" style="max-width:680px;">
+            <div class="card-header">
+              <div class="card-title">⚙️ Emergency Escalation Policies</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div class="form-group">
+                <label class="form-label">Auto-Escalation Threshold</label>
+                <select class="form-select">
+                  <option value="70">AI Risk Score &gt;= 70 (Default)</option>
+                  <option value="60">AI Risk Score &gt;= 60 (Sensitive)</option>
+                  <option value="80">AI Risk Score &gt;= 80 (High Threshold)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Assigned Trauma Center</label>
+                <input type="text" class="form-input" value="MediLink Central Trauma &amp; Emergency Center" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Hospital Dispatch Hotline</label>
+                <input type="text" class="form-input" value="+91 98765 00108" />
+              </div>
+              <button class="btn btn-primary" onclick="showToast('Settings saved successfully', 'success')">Save Configuration</button>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /page-content -->
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       MODALS
+  ═══════════════════════════════════════ -->
+
+  <!-- EMERGENCY CASE DETAIL & TIMELINE MODAL -->
+  <div id="erCaseDetailModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(800px,95vw);">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:24px;">🚨</span>
+          <div>
+            <div class="modal-title" id="erModalCaseTitle" style="color:#ff4d4d;">Emergency Incident</div>
+            <div style="font-size:12px; color:var(--text-muted);" id="erModalCaseSub">Case details, location &amp; response status</div>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeErCaseModal()">✕</button>
+      </div>
+
+      <div id="erModalCaseBody" style="max-height:70vh; overflow-y:auto; padding-right:4px;">
+        <div class="loading-spinner"></div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px; border-top:1px solid var(--border); padding-top:14px; flex-wrap:wrap;" id="erModalActionFooter">
+        <!-- Dynamic workflow buttons injected here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ASSIGN EMERGENCY TEAM MODAL -->
+  <div id="assignTeamModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(500px,95vw);">
+      <div class="modal-header">
+        <div class="modal-title">🚑 Assign Response Unit</div>
+        <button class="modal-close" onclick="closeAssignTeamModal()">✕</button>
+      </div>
+      <form onsubmit="handleAssignTeamSubmit(event)">
+        <input type="hidden" id="assignCaseId" value="" />
+        <div class="form-group">
+          <label class="form-label">Select Response Unit *</label>
+          <select id="teamSelect" class="form-select" required onchange="onTeamSelectChange(this.value)">
+            <option value="TEAM-ALPHA">🚑 Rapid Response Unit 01 (Trauma ALS Ambulance)</option>
+            <option value="TEAM-BRAVO">❤️ Cardiac Care Emergency Unit 02 (MICU)</option>
+            <option value="TEAM-CHARLIE">👵 Geriatric Rapid Assistance Unit 03 (BLS Ambulance)</option>
+            <option value="TEAM-DELTA">🏍️ Rapid Bike Responder Unit 04 (First Responder)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lead Paramedic / Responder</label>
+          <input type="text" id="teamLead" class="form-input" value="Capt. Rajesh Varma (Paramedic)" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact Radio / Phone</label>
+          <input type="text" id="teamContact" class="form-input" value="+91 98765 30001" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vehicle Type</label>
+          <input type="text" id="teamVehicle" class="form-input" value="Advanced Life Support (ALS) Ambulance" required />
+        </div>
+        <div style="display:flex; gap:10px; margin-top:16px;">
+          <button type="submit" class="btn btn-warning" style="flex:1;">Confirm &amp; Dispatch Unit</button>
+          <button type="button" class="btn btn-ghost" onclick="closeAssignTeamModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD CASE NOTE MODAL -->
+  <div id="addCaseNoteModal" class="modal-overlay hidden">
+    <div class="modal" style="width:min(440px,95vw);">
+      <div class="modal-header">
+        <div class="modal-title">📝 Add Dispatch / Clinical Note</div>
+        <button class="modal-close" onclick="closeCaseNoteModal()">✕</button>
+      </div>
+      <form onsubmit="handleAddCaseNoteSubmit(event)">
+        <input type="hidden" id="noteCaseId" value="" />
+        <div class="form-group">
+          <label class="form-label">Incident Note *</label>
+          <textarea id="noteText" class="form-textarea" rows="3" placeholder="Enter paramedic findings, ETA, or treatment notes..." required></textarea>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="flex:1;">Add to Timeline</button>
+          <button type="button" class="btn btn-ghost" onclick="closeCaseNoteModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <link rel="stylesheet" href="components/carelink-ai/ai-chat.css" />
+  <script src="components/carelink-ai/ai-config.js"></script>
+  <script src="components/carelink-ai/ai-chat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/core/locationService.js"></script>
+  <script src="js/auth/auth.js"></script>
+  <script src="js/emergency/emergency.js"></script>
+</body>
+</html>

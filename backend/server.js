@@ -51,7 +51,7 @@ connectDB();
 const isProduction = process.env.NODE_ENV === 'production';
 const isReportOnly = process.env.CSP_REPORT_ONLY === 'true';
 
-const connectSrc = ["'self'", "https://carelink-api-3vzd.onrender.com", "https://accounts.google.com"];
+const connectSrc = ["'self'", "https://carelink-api-3vzd.onrender.com", "https://accounts.google.com", "https://*.tile.openstreetmap.org", "https://tile.openstreetmap.org"];
 if (process.env.CLIENT_URL && !connectSrc.includes(process.env.CLIENT_URL)) {
   connectSrc.push(process.env.CLIENT_URL);
 }
@@ -66,10 +66,10 @@ app.use(helmet({
     useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com", "https://cdn.jsdelivr.net", "https://unpkg.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*.googleusercontent.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*.googleusercontent.com", "https://*.tile.openstreetmap.org", "https://tile.openstreetmap.org", "https://cdn.jsdelivr.net", "https://unpkg.com"],
       connectSrc,
       frameSrc: ["'self'", "https://accounts.google.com"],
       frameAncestors: ["'self'"],
@@ -184,10 +184,26 @@ app.use('/uploads', (_req, res) => {
 });
 // Support both standalone backend (../frontend) and container/unified layouts (./frontend)
 const frontendDir = process.env.FRONTEND_DIR || (
-  fs.existsSync(path.join(__dirname, 'frontend', 'index.html'))
+  fs.existsSync(path.join(__dirname, 'frontend', 'index.html')) || fs.existsSync(path.join(__dirname, 'frontend', 'pages', 'index.html'))
     ? path.join(__dirname, 'frontend')
     : path.join(__dirname, '..', 'frontend')
 );
+const frontendPagesDir = path.join(frontendDir, 'pages');
+if (fs.existsSync(frontendPagesDir)) {
+  app.use(express.static(frontendPagesDir));
+}
+// Support both modular /js/<subfolder>/<file>.js and legacy flat /js/<file>.js
+const jsDir = path.join(frontendDir, 'js');
+if (fs.existsSync(jsDir)) {
+  app.use('/js', express.static(jsDir));
+  try {
+    fs.readdirSync(jsDir, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .forEach(dirent => {
+        app.use('/js', express.static(path.join(jsDir, dirent.name)));
+      });
+  } catch (_e) {}
+}
 app.use(express.static(frontendDir));
 
 // ─── Scheduled Jobs ───────────────────────────────────────────────────────
@@ -197,6 +213,7 @@ require('./utils/scheduler');
 app.use('/auth', require('./routes/googleAuth'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/patients', require('./routes/patients'));
+app.use('/api/doctors', require('./routes/doctors'));
 app.use('/api/vitals', require('./routes/vitals'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/reports', require('./routes/reports'));
@@ -207,6 +224,7 @@ app.use('/api/medication', require('./routes/medication'));
 app.use('/api/pharmacy', require('./routes/pharmacy'));
 app.use('/api/insurance', require('./routes/insurance'));
 app.use('/api/emergency', require('./routes/emergency'));
+app.use('/api/hospitals', require('./routes/hospitals'));
 app.use('/api/admin', require('./routes/admin'));
 
 // ─── CSP Violation Reporting ───────────────────────────────────────────────
@@ -233,6 +251,10 @@ app.all('/api/*', apiNotFoundHandler);
 
 // ─── Catch-all: serve frontend SPA ────────────────────────────────────────
 app.get('*', (_req, res) => {
+  const pageIndex = path.join(frontendDir, 'pages', 'index.html');
+  if (fs.existsSync(pageIndex)) {
+    return res.sendFile(pageIndex);
+  }
   res.sendFile(path.join(frontendDir, 'index.html'));
 });
 
@@ -249,6 +271,16 @@ const server = app.listen(PORT, () => {
   ║   Mode: ${process.env.NODE_ENV || 'development'}                   ║
   ╚═══════════════════════════════════════╝
   `);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [PORT CONFLICT] Port ${PORT} is already in use by another running instance or a previous session in TIME_WAIT.`);
+    console.error(`👉 Solution: Stop any existing Node processes running on port ${PORT}, wait 5 seconds, or start on another port: PORT=5001 npm start\n`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
 });
 
 // Initialize WebSocket server

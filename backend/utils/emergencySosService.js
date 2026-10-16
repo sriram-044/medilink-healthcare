@@ -192,28 +192,46 @@ class UserDataModule {
       latitude: null,
       longitude: null,
       accuracy: null,
+      accuracyMeters: null,
       timestamp: new Date(),
+      capturedAt: new Date(),
       address: null,
       mapsUrl: null,
+      source: 'unknown',
+      consentStatus: null,
       isAvailable: false
     };
 
     if (rawLocation && typeof rawLocation === 'object') {
-      const lat = rawLocation.latitude ? Number(rawLocation.latitude) : null;
-      const lng = rawLocation.longitude ? Number(rawLocation.longitude) : null;
-      const isGps = Boolean(lat && lng);
+      const rawLat = rawLocation.latitude !== undefined && rawLocation.latitude !== null ? Number(rawLocation.latitude) : null;
+      const rawLng = rawLocation.longitude !== undefined && rawLocation.longitude !== null ? Number(rawLocation.longitude) : null;
+      const isValidGps = Boolean(
+        rawLat !== null && !isNaN(rawLat) && rawLat >= -90 && rawLat <= 90 &&
+        rawLng !== null && !isNaN(rawLng) && rawLng >= -180 && rawLng <= 180
+      );
+
+      const accuracy = rawLocation.accuracyMeters || rawLocation.accuracy || null;
+      const source = rawLocation.source || (isValidGps ? 'gps' : (rawLocation.address ? 'manual' : 'unknown'));
+      const consentStatus = rawLocation.consentStatus || (isValidGps ? 'granted' : 'manual');
+      const time = rawLocation.timestamp || rawLocation.capturedAt ? new Date(rawLocation.timestamp || rawLocation.capturedAt) : new Date();
 
       locationObj = {
-        latitude: lat,
-        longitude: lng,
-        accuracy: rawLocation.accuracy || null,
-        timestamp: rawLocation.timestamp ? new Date(rawLocation.timestamp) : new Date(),
-        address: rawLocation.address || (isGps ? `GPS Coordinates: ${lat.toFixed(5)}, ${lng.toFixed(5)}` : null),
-        mapsUrl: isGps ? `https://maps.google.com/?q=${lat},${lng}` : null,
-        isAvailable: isGps || Boolean(rawLocation.address)
+        latitude: isValidGps ? rawLat : null,
+        longitude: isValidGps ? rawLng : null,
+        accuracy: accuracy ? Math.round(accuracy) : null,
+        accuracyMeters: accuracy ? Math.round(accuracy) : null,
+        timestamp: time,
+        capturedAt: time,
+        address: rawLocation.address || (isValidGps ? `GPS: ${rawLat.toFixed(5)}, ${rawLng.toFixed(5)}` : null),
+        mapsUrl: isValidGps ? `https://www.google.com/maps/search/?api=1&query=${rawLat},${rawLng}` : null,
+        source,
+        consentStatus,
+        isAvailable: isValidGps || Boolean(rawLocation.address)
       };
     } else if (typeof rawLocation === 'string' && rawLocation.trim()) {
       locationObj.address = rawLocation.trim();
+      locationObj.source = 'manual';
+      locationObj.consentStatus = 'manual';
       locationObj.isAvailable = true;
     }
 
@@ -222,6 +240,7 @@ class UserDataModule {
       const room = patientIdOrUser.roomLocation || patientIdOrUser.address;
       if (room) {
         locationObj.address = room;
+        locationObj.source = 'profile_fallback';
         locationObj.isAvailable = true;
       }
     }
@@ -612,6 +631,9 @@ class EmergencyEngine {
       });
 
       if (existingCase) {
+        if (resolvedLocation && (resolvedLocation.latitude !== null || resolvedLocation.address)) {
+          existingCase.location = resolvedLocation;
+        }
         existingCase.timeline.push({
           event: 'SOS_TRIGGERED',
           message: `Repeated SOS signal received: ${triggerSource === 'MANUAL_BUTTON' ? 'Patient activated manual SOS alert.' : 'Unusual health readings detected requiring escalation.'}`,
@@ -619,7 +641,7 @@ class EmergencyEngine {
           performedBy: performedBy || user._id,
           performedByName: user.name,
           performedByRole: triggerSource === 'MANUAL_BUTTON' ? 'patient' : 'system',
-          metadata: { triggerSource, vitals }
+          metadata: { triggerSource, vitals, location: resolvedLocation }
         });
         await existingCase.save();
 
@@ -971,16 +993,28 @@ class EmergencyCaseService {
     const emergencyCase = await EmergencyCase.findById(caseId);
     if (!emergencyCase) throw new Error('Emergency case not found');
 
-    const lat = locationData.latitude ? Number(locationData.latitude) : emergencyCase.location.latitude;
-    const lng = locationData.longitude ? Number(locationData.longitude) : emergencyCase.location.longitude;
+    const rawLat = locationData.latitude !== undefined && locationData.latitude !== null ? Number(locationData.latitude) : emergencyCase.location?.latitude;
+    const rawLng = locationData.longitude !== undefined && locationData.longitude !== null ? Number(locationData.longitude) : emergencyCase.location?.longitude;
+    const isValidGps = Boolean(
+      rawLat !== null && !isNaN(rawLat) && rawLat >= -90 && rawLat <= 90 &&
+      rawLng !== null && !isNaN(rawLng) && rawLng >= -180 && rawLng <= 180
+    );
+
+    const accuracy = locationData.accuracyMeters || locationData.accuracy || emergencyCase.location?.accuracy || null;
+    const now = new Date();
 
     emergencyCase.location = {
-      latitude: lat,
-      longitude: lng,
-      accuracy: locationData.accuracy || emergencyCase.location.accuracy,
-      timestamp: new Date(),
-      address: locationData.address || emergencyCase.location.address || (lat ? `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}` : 'Live telemetry'),
-      isAvailable: Boolean(lat && lng)
+      latitude: isValidGps ? rawLat : null,
+      longitude: isValidGps ? rawLng : null,
+      accuracy: accuracy ? Math.round(accuracy) : null,
+      accuracyMeters: accuracy ? Math.round(accuracy) : null,
+      timestamp: now,
+      capturedAt: now,
+      source: locationData.source || (isValidGps ? 'gps' : 'manual'),
+      consentStatus: locationData.consentStatus || (isValidGps ? 'granted' : 'manual'),
+      address: locationData.address || emergencyCase.location?.address || (isValidGps ? `GPS: ${rawLat.toFixed(5)}, ${rawLng.toFixed(5)}` : 'Live telemetry'),
+      mapsUrl: isValidGps ? `https://www.google.com/maps/search/?api=1&query=${rawLat},${rawLng}` : null,
+      isAvailable: isValidGps || Boolean(locationData.address || emergencyCase.location?.address)
     };
 
     emergencyCase.timeline.push({
